@@ -27,11 +27,25 @@ async function openPreview(
   stateManager?: StateManager,
   cacheManager?: EpubCacheManager
 ): Promise<void> {
-  const source = uri ?? vscode.window.activeTextEditor?.document.uri;
+  let source = uri ?? getActiveFileUri();
 
   if (!source || !supportedExtensions.has(extensionOf(source))) {
-    void vscode.window.showWarningMessage('Open an XHTML, HTML, HTM, or EPUB file first.');
-    return;
+    const selected = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      title: 'Select XHTML or EPUB Book to Preview',
+      openLabel: 'Open Preview',
+      filters: {
+        'EPUB & XHTML Books': ['epub', 'xhtml', 'html', 'htm']
+      }
+    });
+
+    if (selected && selected[0]) {
+      source = selected[0];
+    } else {
+      return;
+    }
   }
 
   const ext = extensionOf(source);
@@ -392,6 +406,22 @@ async function resolveResource(
 
 function parentUri(uri: vscode.Uri): vscode.Uri {
   return uri.with({ path: uri.path.slice(0, uri.path.lastIndexOf('/')) });
+}
+
+function getActiveFileUri(): vscode.Uri | undefined {
+  if (vscode.window.activeTextEditor?.document.uri) {
+    return vscode.window.activeTextEditor.document.uri;
+  }
+
+  const activeTab = vscode.window.tabGroups?.activeTabGroup?.activeTab;
+  if (activeTab?.input && typeof activeTab.input === 'object') {
+    const input = activeTab.input as { uri?: unknown };
+    if (input.uri instanceof vscode.Uri) {
+      return input.uri;
+    }
+  }
+
+  return undefined;
 }
 
 function extensionOf(uri: vscode.Uri): string {

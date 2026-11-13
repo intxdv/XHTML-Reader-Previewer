@@ -38,6 +38,13 @@
           "when": "resourceExtname == .xhtml || resourceExtname == .html || resourceExtname == .htm || resourceExtname == .epub",
           "group": "navigation@1"
         }
+      ],
+      "editor/title": [
+        {
+          "command": "xhtmlReader.openPreview",
+          "when": "resourceExtname == .xhtml || resourceExtname == .html || resourceExtname == .htm || resourceExtname == .epub",
+          "group": "navigation"
+        }
       ]
     }
   },
