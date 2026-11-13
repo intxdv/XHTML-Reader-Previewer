@@ -16,6 +16,11 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
   <style nonce="${nonce}">
     :root {
       --reader-size: 18px;
+      --reader-line-height: 1.8;
+      --reader-max-width: 44rem;
+      --reader-font: Georgia, "Times New Roman", serif;
+
+      /* Dark Theme (Default) */
       --reader-bg: #111827;
       --reader-fg: #e5e7eb;
       --reader-link: #93c5fd;
@@ -27,13 +32,17 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     body {
       background: var(--reader-bg);
       color: var(--reader-fg);
-      font: var(--reader-size)/1.8 Georgia, serif;
+      font-family: var(--reader-font);
+      font-size: var(--reader-size);
+      line-height: var(--reader-line-height);
       margin: 0;
-      padding: 4.5rem 1.5rem 3rem;
+      padding: 5rem 1.5rem 4rem;
+      transition: background 0.2s ease, color 0.2s ease;
     }
     main {
-      max-width: 42rem;
+      max-width: var(--reader-max-width);
       margin: auto;
+      transition: max-width 0.2s ease;
     }
     img, video {
       display: block;
@@ -46,7 +55,7 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     }
     hr {
       border: 0;
-      border-top: 1px solid #374151;
+      border-top: 1px solid rgba(156, 163, 175, 0.25);
       margin: 2rem 0;
     }
     #toolbar {
@@ -56,22 +65,38 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       left: 0;
       right: 0;
       display: flex;
-      gap: 0.5rem;
+      flex-wrap: wrap;
+      gap: 0.45rem;
       align-items: center;
-      padding: 0.65rem 1rem;
+      padding: 0.55rem 1rem;
       background: #111827e8;
       backdrop-filter: blur(8px);
       border-bottom: 1px solid #374151;
-      font-family: var(--vscode-font-family, system-ui);
+      font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .toolbar-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .toolbar-separator {
+      width: 1px;
+      height: 1.25rem;
+      background: rgba(156, 163, 175, 0.25);
+      margin: 0 0.25rem;
     }
     button {
       color: inherit;
       background: #1f2937;
       border: 1px solid #4b5563;
       border-radius: 0.35rem;
-      padding: 0.3rem 0.55rem;
+      padding: 0.28rem 0.55rem;
       cursor: pointer;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
+      font-family: inherit;
+      font-weight: 500;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
     button:hover {
       background: #374151;
@@ -87,6 +112,22 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       user-select: none;
       min-width: 2.2rem;
       text-align: center;
+    }
+    /* Reading Progress Bar */
+    #progress-track {
+      position: absolute;
+      bottom: -3px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: transparent;
+      pointer-events: none;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--reader-link);
+      transition: width 0.08s linear;
     }
     /* Anchored Footnote Popover */
     .footnote-popover {
@@ -162,6 +203,7 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     }
     .light #toolbar {
       background: #f8fafce8;
+      border-color: #cbd5e1;
     }
     .light button {
       background: #e2e8f0;
@@ -174,15 +216,53 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     .light .font-size-badge {
       background: rgba(0, 0, 0, 0.08);
     }
+    /* Sepia Theme */
+    .sepia {
+      --reader-bg: #fbf0d9;
+      --reader-fg: #5f4b32;
+      --reader-link: #92400e;
+      --popover-bg: #f5e6c8;
+      --popover-fg: #453216;
+      --popover-border: #d4bc91;
+      --popover-shadow: 0 10px 25px -5px rgba(95,75,50,0.15), 0 8px 10px -6px rgba(95,75,50,0.1);
+    }
+    .sepia #toolbar {
+      background: #fbf0d9e8;
+      border-color: #d4bc91;
+    }
+    .sepia button {
+      background: #ebd8b5;
+      color: #5f4b32;
+      border-color: #d4bc91;
+    }
+    .sepia button:hover {
+      background: #dfcaa4;
+    }
+    .sepia .font-size-badge {
+      background: rgba(95, 75, 50, 0.08);
+    }
   </style>
 </head>
 <body data-fragment="${initialFragment}">
   <header id="toolbar" aria-label="Reader controls">
-    <button type="button" data-action="smaller" aria-label="Decrease text size">A−</button>
-    <span id="font-size-display" class="font-size-badge" aria-label="Current text size">18px</span>
-    <button type="button" data-action="larger" aria-label="Increase text size">A+</button>
-    <button type="button" data-action="theme" aria-label="Toggle reader theme">Theme</button>
+    <div class="toolbar-group">
+      <button type="button" data-action="smaller" aria-label="Decrease text size">A−</button>
+      <span id="font-size-display" class="font-size-badge" aria-label="Current text size">18px</span>
+      <button type="button" data-action="larger" aria-label="Increase text size">A+</button>
+    </div>
+
+    <div class="toolbar-separator"></div>
+
+    <button type="button" data-action="theme" id="theme-btn" aria-label="Change theme">Theme: Dark</button>
+    <button type="button" data-action="font" id="font-btn" aria-label="Change font">Font: Serif</button>
+    <button type="button" data-action="spacing" id="spacing-btn" aria-label="Change line height">Spacing: Normal</button>
+    <button type="button" data-action="width" id="width-btn" aria-label="Change content width">Width: Normal</button>
+
+    <div id="progress-track" aria-hidden="true">
+      <div id="progress-bar"></div>
+    </div>
   </header>
+
   <main>${content.replace(/<style\b/gi, `<style nonce="${nonce}"`)}</main>
 
   <div id="footnote-popover" class="footnote-popover" role="dialog" aria-modal="false" aria-label="Footnote" hidden>
@@ -196,14 +276,42 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     const caret = document.getElementById('footnote-caret');
     const noteContent = document.getElementById('footnote-content');
     const fontSizeDisplay = document.getElementById('font-size-display');
+    const themeBtn = document.getElementById('theme-btn');
+    const fontBtn = document.getElementById('font-btn');
+    const spacingBtn = document.getElementById('spacing-btn');
+    const widthBtn = document.getElementById('width-btn');
+    const progressBar = document.getElementById('progress-bar');
+
     let size = 18;
+    const themes = ['dark', 'light', 'sepia'];
+    let themeIndex = 0;
+
+    const fonts = [
+      { id: 'serif', label: 'Font: Serif', css: 'Georgia, "Times New Roman", serif' },
+      { id: 'sans', label: 'Font: Sans', css: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+      { id: 'mono', label: 'Font: Mono', css: '"Cascadia Code", Consolas, "Courier New", monospace' }
+    ];
+    let fontIndex = 0;
+
+    const spacings = [
+      { id: 'normal', label: 'Spacing: Normal', val: '1.8' },
+      { id: 'relaxed', label: 'Spacing: Relaxed', val: '2.1' },
+      { id: 'tight', label: 'Spacing: Tight', val: '1.5' }
+    ];
+    let spacingIndex = 0;
+
+    const widths = [
+      { id: 'normal', label: 'Width: Normal', val: '44rem' },
+      { id: 'wide', label: 'Width: Wide', val: '54rem' },
+      { id: 'compact', label: 'Width: Compact', val: '36rem' }
+    ];
+    let widthIndex = 0;
 
     const setSize = () => {
       document.documentElement.style.setProperty('--reader-size', size + 'px');
-      if (fontSizeDisplay) {
-        fontSizeDisplay.textContent = size + 'px';
-      }
+      if (fontSizeDisplay) fontSizeDisplay.textContent = size + 'px';
     };
+
     const scrollToFragment = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     function hidePopover() {
@@ -211,6 +319,17 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
         popover.hidden = true;
       }
     }
+
+    function updateProgress() {
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = docHeight > 0 ? Math.min(100, Math.max(0, (scrollY / docHeight) * 100)) : 0;
+      if (progressBar) {
+        progressBar.style.width = pct + '%';
+      }
+    }
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
 
     function isFootnoteLink(link, href) {
       if (!href.startsWith('#')) return false;
@@ -241,8 +360,6 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
 
     function extractCleanFootnote(target) {
       const clone = target.cloneNode(true);
-
-      // Convert or remove internal return backlinks and reference anchors
       const links = clone.querySelectorAll('a');
       links.forEach((el) => {
         const h = el.getAttribute('href') || '';
@@ -251,18 +368,14 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
         if (role.includes('doc-backlink') || epubType.includes('backlink') || el.classList.contains('footnote-backref') || el.classList.contains('backlink')) {
           el.remove();
         } else if (h.startsWith('#')) {
-          // Replace with plain text (e.g. "1." instead of an active link to avoid accidental jumping)
           el.replaceWith(document.createTextNode(el.textContent));
         }
       });
-
-      // Strip trailing return character symbols (like ↩, ↑, ↵)
       clone.innerHTML = clone.innerHTML.replace(/[\\s\\u00A0]*[\\u21A9\\u2191\\u21B5][\\s\\u00A0]*/g, '');
       return clone.innerHTML;
     }
 
     function showFootnotePopover(link, target) {
-      // Prevent focus jump
       if (link && typeof link.blur === 'function') {
         link.blur();
       }
@@ -270,7 +383,6 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       noteContent.innerHTML = extractCleanFootnote(target);
       popover.hidden = false;
 
-      // Position popover relative to document
       const linkRect = link.getBoundingClientRect();
       const popoverWidth = popover.offsetWidth;
       const popoverHeight = popover.offsetHeight;
@@ -291,7 +403,6 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
         caret.className = 'footnote-caret place-bottom';
       }
 
-      // Horizontal centering on the link with viewport bounding
       const linkCenter = scrollX + linkRect.left + (linkRect.width / 2);
       let left = linkCenter - (popoverWidth / 2);
       const minLeft = scrollX + 12;
@@ -301,11 +412,9 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       popover.style.top = top + 'px';
       popover.style.left = left + 'px';
 
-      // Caret horizontal alignment
       const caretLeft = Math.max(12, Math.min(popoverWidth - 22, linkCenter - left - 5));
       caret.style.left = caretLeft + 'px';
 
-      // Ensure viewport scroll position is not dragged or shifted
       const lockScrollY = scrollY;
       const lockScrollX = scrollX;
       requestAnimationFrame(() => {
@@ -317,7 +426,10 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
 
     // Toolbar actions
     document.getElementById('toolbar').addEventListener('click', (event) => {
-      const action = event.target.dataset.action;
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+      const action = button.dataset.action;
+
       if (action === 'smaller') {
         size = Math.max(12, size - 1);
         setSize();
@@ -327,7 +439,31 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
         setSize();
       }
       if (action === 'theme') {
-        document.documentElement.classList.toggle('light');
+        themeIndex = (themeIndex + 1) % themes.length;
+        document.documentElement.classList.remove('light', 'sepia');
+        const nextTheme = themes[themeIndex];
+        if (nextTheme !== 'dark') {
+          document.documentElement.classList.add(nextTheme);
+        }
+        themeBtn.textContent = 'Theme: ' + nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1);
+      }
+      if (action === 'font') {
+        fontIndex = (fontIndex + 1) % fonts.length;
+        const font = fonts[fontIndex];
+        document.documentElement.style.setProperty('--reader-font', font.css);
+        fontBtn.textContent = font.label;
+      }
+      if (action === 'spacing') {
+        spacingIndex = (spacingIndex + 1) % spacings.length;
+        const sp = spacings[spacingIndex];
+        document.documentElement.style.setProperty('--reader-line-height', sp.val);
+        spacingBtn.textContent = sp.label;
+      }
+      if (action === 'width') {
+        widthIndex = (widthIndex + 1) % widths.length;
+        const w = widths[widthIndex];
+        document.documentElement.style.setProperty('--reader-max-width', w.val);
+        widthBtn.textContent = w.label;
       }
     });
 

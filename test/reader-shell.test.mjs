@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 test('readerShell contains anchored footnote popover elements instead of modal dialog', async () => {
-  // Read dist/extension.js or test template structure
   const fs = await import('node:fs');
   const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
 
@@ -20,4 +19,22 @@ test('readerShell contains anchored footnote popover elements instead of modal d
   assert.match(extensionBundle, /extractCleanFootnote/);
   assert.match(extensionBundle, /showFootnotePopover/);
   assert.match(extensionBundle, /hidePopover/);
+});
+
+test('readerShell contains advanced typography controls and sepia theme', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify theme cycle (dark, light, sepia)
+  assert.match(extensionBundle, /\.sepia\s*\{/);
+  assert.match(extensionBundle, /id=["']theme-btn["']/);
+
+  // Verify font, spacing, and width controls
+  assert.match(extensionBundle, /id=["']font-btn["']/);
+  assert.match(extensionBundle, /id=["']spacing-btn["']/);
+  assert.match(extensionBundle, /id=["']width-btn["']/);
+
+  // Verify reading progress bar
+  assert.match(extensionBundle, /id=["']progress-bar["']/);
+  assert.match(extensionBundle, /updateProgress/);
 });
