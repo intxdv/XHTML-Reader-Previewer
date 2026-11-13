@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { sanitizeXhtml } from './xhtml';
-import { readerShell } from './reader-shell';
+import { readerShell, ReaderNavInfo } from './reader-shell';
+import { locateEpubContainer, parseContainerXml, parseOpfXml, EpubPackage } from './epub';
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
@@ -12,7 +13,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.ViewColumn.Active): void {
+async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.ViewColumn.Active): Promise<void> {
   const source = uri ?? vscode.window.activeTextEditor?.document.uri;
 
   if (!source || !supportedExtensions.has(extensionOf(source))) {
@@ -23,48 +24,122 @@ function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.ViewColumn
   const root = parentUri(source);
   let currentSource = source;
   let pendingFragment: string | undefined;
+
+  // Attempt EPUB Package discovery
+  let epubPackage: EpubPackage | undefined;
+  try {
+    const containerRoot = await locateEpubContainer(source);
+    if (containerRoot) {
+      const containerUri = vscode.Uri.joinPath(containerRoot, 'META-INF', 'container.xml');
+      const containerBytes = await vscode.workspace.fs.readFile(containerUri);
+      const containerXml = new TextDecoder('utf-8').decode(containerBytes);
+      const opfRelPath = parseContainerXml(containerXml);
+      if (opfRelPath) {
+        const opfSegments = opfRelPath.split('/').filter(Boolean);
+        const opfUri = vscode.Uri.joinPath(containerRoot, ...opfSegments);
+        const opfBytes = await vscode.workspace.fs.readFile(opfUri);
+        const opfXml = new TextDecoder('utf-8').decode(opfBytes);
+        epubPackage = parseOpfXml(opfXml, opfUri, containerRoot);
+      }
+    }
+  } catch (error) {
+    console.warn('XHTML Reader: EPUB container parsing fallback:', error);
+  }
+
+  const localResourceRoots = epubPackage
+    ? [epubPackage.containerRoot, epubPackage.opfDir, root]
+    : [root];
+
   const panel = vscode.window.createWebviewPanel(
     'xhtmlReaderPreview',
-    `Reader: ${vscode.workspace.asRelativePath(source, false) || source.fsPath}`,
+    getPanelTitle(currentSource, epubPackage),
     viewColumn,
-    { enableScripts: true, localResourceRoots: [root] },
+    { enableScripts: true, localResourceRoots },
   );
+
   let timer: NodeJS.Timeout | undefined;
 
   const render = async (): Promise<void> => {
     try {
       const xhtml = await readSource(currentSource);
-      const content = await rewriteResourceUris(sanitizeXhtml(xhtml), root, panel.webview);
-      panel.title = `Reader: ${vscode.workspace.asRelativePath(currentSource, false) || currentSource.fsPath}`;
-      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview);
+      const chapterDir = parentUri(currentSource);
+      const fallbackDir = epubPackage?.opfDir;
+      const content = await rewriteResourceUris(sanitizeXhtml(xhtml), chapterDir, panel.webview, fallbackDir);
+
+      const spineIndex = epubPackage?.spine.findIndex(
+        (item) => item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
+      ) ?? -1;
+
+      const navInfo: ReaderNavInfo = {
+        hasPrev: spineIndex > 0,
+        hasNext: spineIndex >= 0 && spineIndex < (epubPackage?.spine.length ?? 0) - 1,
+        bookTitle: epubPackage?.title,
+        chapterIndex: spineIndex >= 0 ? spineIndex + 1 : undefined,
+        totalChapters: epubPackage?.spine.length
+      };
+
+      panel.title = getPanelTitle(currentSource, epubPackage, spineIndex);
+      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo);
       pendingFragment = undefined;
     } catch (error) {
       panel.webview.html = errorShell(error);
     }
   };
+
   const scheduleRender = (): void => {
     if (timer) {
       clearTimeout(timer);
     }
     timer = setTimeout(() => void render(), 200);
   };
-  const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, '**/*'));
+
+  const watchRoot = epubPackage ? epubPackage.containerRoot : root;
+  const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(watchRoot, '**/*'));
   const documentChange = vscode.workspace.onDidChangeTextDocument((event) => {
     if (event.document.uri.toString() === currentSource.toString()) {
       scheduleRender();
     }
   });
+
   const messageSubscription = panel.webview.onDidReceiveMessage((message: unknown) => {
-    if (!isOpenLinkMessage(message)) {
+    if (isPrevChapterMessage(message)) {
+      if (epubPackage) {
+        const currentIndex = epubPackage.spine.findIndex(
+          (item) => item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
+        );
+        if (currentIndex > 0) {
+          currentSource = epubPackage.spine[currentIndex - 1].uri;
+          pendingFragment = undefined;
+          void render();
+        }
+      }
       return;
     }
-    const target = resolveChapterLink(message.href, currentSource, root);
-    if (target) {
-      currentSource = target.source;
-      pendingFragment = target.fragment;
-      void render();
+
+    if (isNextChapterMessage(message)) {
+      if (epubPackage) {
+        const currentIndex = epubPackage.spine.findIndex(
+          (item) => item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
+        );
+        if (currentIndex >= 0 && currentIndex < epubPackage.spine.length - 1) {
+          currentSource = epubPackage.spine[currentIndex + 1].uri;
+          pendingFragment = undefined;
+          void render();
+        }
+      }
+      return;
+    }
+
+    if (isOpenLinkMessage(message)) {
+      const target = resolveChapterLink(message.href, currentSource, watchRoot);
+      if (target) {
+        currentSource = target.source;
+        pendingFragment = target.fragment;
+        void render();
+      }
     }
   });
+
   const watcherChanges = [
     watcher.onDidChange(scheduleRender),
     watcher.onDidCreate(scheduleRender),
@@ -80,7 +155,27 @@ function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.ViewColumn
     messageSubscription.dispose();
     watcherChanges.forEach((subscription) => subscription.dispose());
   });
+
   void render();
+}
+
+function getPanelTitle(source: vscode.Uri, epub?: EpubPackage, spineIndex = -1): string {
+  const fileName = source.path.slice(source.path.lastIndexOf('/') + 1);
+  if (!epub) {
+    return `Reader: ${fileName}`;
+  }
+  if (spineIndex >= 0) {
+    return `${epub.title} [${spineIndex + 1}/${epub.spine.length}] — ${fileName}`;
+  }
+  return `${epub.title} — ${fileName}`;
+}
+
+function isPrevChapterMessage(message: unknown): message is { type: 'prevChapter' } {
+  return typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'prevChapter';
+}
+
+function isNextChapterMessage(message: unknown): message is { type: 'nextChapter' } {
+  return typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'nextChapter';
 }
 
 function isOpenLinkMessage(message: unknown): message is { type: 'openLink'; href: string } {
@@ -98,11 +193,8 @@ function resolveChapterLink(href: string, source: vscode.Uri, root: vscode.Uri):
 
   try {
     const segments = path.split('/').map(decodeURIComponent);
-    if (segments.some((segment) => segment === '..' || !segment)) {
-      return undefined;
-    }
     const target = vscode.Uri.joinPath(parentUri(source), ...segments);
-    if (!target.path.startsWith(`${root.path}/`) || !supportedExtensions.has(extensionOf(target))) {
+    if (!target.path.toLowerCase().startsWith(`${root.path.toLowerCase()}/`) || !supportedExtensions.has(extensionOf(target))) {
       return undefined;
     }
     return { source: target, fragment: fragment ? decodeURIComponent(fragment) : undefined };
@@ -119,14 +211,19 @@ async function readSource(source: vscode.Uri): Promise<string> {
   return new TextDecoder('utf-8').decode(await vscode.workspace.fs.readFile(source));
 }
 
-async function rewriteResourceUris(markup: string, root: vscode.Uri, webview: vscode.Webview): Promise<string> {
+async function rewriteResourceUris(
+  markup: string,
+  root: vscode.Uri,
+  webview: vscode.Webview,
+  fallbackRoot?: vscode.Uri
+): Promise<string> {
   const resources = new Map<string, string>();
   const matches = [...markup.matchAll(resourceAttributes)];
 
   for (const match of matches) {
     const raw = match[3];
     if (!resources.has(raw)) {
-      const resolved = await resolveResource(raw, root, webview);
+      const resolved = await resolveResource(raw, root, webview, fallbackRoot);
       if (resolved) {
         resources.set(raw, resolved);
       }
@@ -139,7 +236,12 @@ async function rewriteResourceUris(markup: string, root: vscode.Uri, webview: vs
   });
 }
 
-async function resolveResource(raw: string, root: vscode.Uri, webview: vscode.Webview): Promise<string | undefined> {
+async function resolveResource(
+  raw: string,
+  root: vscode.Uri,
+  webview: vscode.Webview,
+  fallbackRoot?: vscode.Uri
+): Promise<string | undefined> {
   const path = raw.split(/[?#]/, 1)[0];
   if (!path || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(path)) {
     return undefined;
@@ -147,12 +249,18 @@ async function resolveResource(raw: string, root: vscode.Uri, webview: vscode.We
 
   try {
     const segments = path.split('/').map(decodeURIComponent);
-    if (segments.some((segment) => segment === '..' || !segment)) {
-      return undefined;
-    }
     const resource = vscode.Uri.joinPath(root, ...segments);
-    await vscode.workspace.fs.stat(resource);
-    return webview.asWebviewUri(resource).toString();
+    try {
+      await vscode.workspace.fs.stat(resource);
+      return webview.asWebviewUri(resource).toString();
+    } catch {
+      if (fallbackRoot) {
+        const fallbackResource = vscode.Uri.joinPath(fallbackRoot, ...segments);
+        await vscode.workspace.fs.stat(fallbackResource);
+        return webview.asWebviewUri(fallbackResource).toString();
+      }
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -173,5 +281,11 @@ function errorShell(error: unknown): string {
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
+  return value.replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  })[character] ?? character);
 }

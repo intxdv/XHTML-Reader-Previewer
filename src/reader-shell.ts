@@ -1,10 +1,34 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
 
-export function readerShell(content: string, source: vscode.Uri, fragment: string | undefined, webview: vscode.Webview): string {
+export interface ReaderNavInfo {
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  bookTitle?: string;
+  chapterIndex?: number;
+  totalChapters?: number;
+}
+
+export function readerShell(
+  content: string,
+  source: vscode.Uri,
+  fragment: string | undefined,
+  webview: vscode.Webview,
+  navInfo?: ReaderNavInfo
+): string {
   const nonce = randomBytes(16).toString('base64');
   const title = escapeHtml(vscode.workspace.asRelativePath(source, false) || source.fsPath);
   const initialFragment = escapeHtml(fragment ?? '');
+
+  const hasNav = navInfo && typeof navInfo.totalChapters === 'number' && navInfo.totalChapters > 0;
+  const navHtml = hasNav
+    ? `<div class="toolbar-separator"></div>
+    <div class="toolbar-group nav-group">
+      <button type="button" data-action="prev-chapter" id="prev-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo.hasPrev ? '' : 'disabled'}>← Prev</button>
+      <span class="chapter-badge" title="${escapeHtml(navInfo.bookTitle || '')}">${navInfo.chapterIndex ?? 1} / ${navInfo.totalChapters}</span>
+      <button type="button" data-action="next-chapter" id="next-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo.hasNext ? '' : 'disabled'}>Next →</button>
+    </div>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -98,10 +122,15 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       font-weight: 500;
       transition: background 0.15s ease, border-color 0.15s ease;
     }
-    button:hover {
+    button:hover:not(:disabled) {
       background: #374151;
     }
-    .font-size-badge {
+    button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      border-color: transparent;
+    }
+    .font-size-badge, .chapter-badge {
       font-size: 0.82rem;
       font-weight: 500;
       padding: 0.2rem 0.45rem;
@@ -210,10 +239,10 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       color: #172033;
       border-color: #cbd5e1;
     }
-    .light button:hover {
+    .light button:hover:not(:disabled) {
       background: #cbd5e1;
     }
-    .light .font-size-badge {
+    .light .font-size-badge, .light .chapter-badge {
       background: rgba(0, 0, 0, 0.08);
     }
     /* Sepia Theme */
@@ -235,10 +264,10 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       color: #5f4b32;
       border-color: #d4bc91;
     }
-    .sepia button:hover {
+    .sepia button:hover:not(:disabled) {
       background: #dfcaa4;
     }
-    .sepia .font-size-badge {
+    .sepia .font-size-badge, .sepia .chapter-badge {
       background: rgba(95, 75, 50, 0.08);
     }
   </style>
@@ -257,6 +286,8 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     <button type="button" data-action="font" id="font-btn" aria-label="Change font">Font: Serif</button>
     <button type="button" data-action="spacing" id="spacing-btn" aria-label="Change line height">Spacing: Normal</button>
     <button type="button" data-action="width" id="width-btn" aria-label="Change content width">Width: Normal</button>
+
+    ${navHtml}
 
     <div id="progress-track" aria-hidden="true">
       <div id="progress-bar"></div>
@@ -465,6 +496,12 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
         document.documentElement.style.setProperty('--reader-max-width', w.val);
         widthBtn.textContent = w.label;
       }
+      if (action === 'prev-chapter') {
+        vscode.postMessage({ type: 'prevChapter' });
+      }
+      if (action === 'next-chapter') {
+        vscode.postMessage({ type: 'nextChapter' });
+      }
     });
 
     // Link handling & footnote interception
@@ -505,10 +542,16 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       }
     });
 
-    // Escape key dismissal
+    // Keyboard shortcuts
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         hidePopover();
+      }
+      if (event.key === '[' || (event.altKey && event.key === 'ArrowLeft')) {
+        vscode.postMessage({ type: 'prevChapter' });
+      }
+      if (event.key === ']' || (event.altKey && event.key === 'ArrowRight')) {
+        vscode.postMessage({ type: 'nextChapter' });
       }
     });
 
