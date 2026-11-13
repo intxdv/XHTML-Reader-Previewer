@@ -76,13 +76,23 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     button:hover {
       background: #374151;
     }
+    .font-size-badge {
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.2rem 0.45rem;
+      border-radius: 0.25rem;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--reader-fg);
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+      min-width: 2.2rem;
+      text-align: center;
+    }
     /* Anchored Footnote Popover */
     .footnote-popover {
       position: absolute;
       z-index: 100;
-      max-width: min(30rem, calc(100vw - 2rem));
-      max-height: 55vh;
-      overflow-y: auto;
+      max-width: min(32rem, calc(100vw - 2rem));
       background: var(--popover-bg);
       color: var(--popover-fg);
       border: 1px solid var(--popover-border);
@@ -92,6 +102,7 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       font-size: 0.88rem;
       line-height: 1.6;
       box-sizing: border-box;
+      overflow: visible;
       animation: popoverFadeIn 0.12s ease-out;
     }
     .footnote-popover[hidden] {
@@ -123,13 +134,16 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     }
     .footnote-body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-height: 45vh;
+      overflow-y: auto;
+      scrollbar-width: none; /* Hide scrollbar */
+      -ms-overflow-style: none;
+    }
+    .footnote-body::-webkit-scrollbar {
+      display: none; /* Hide Chrome/WebKit scrollbar */
     }
     .footnote-body p {
       margin: 0.25rem 0;
-    }
-    .footnote-body a[role="doc-backlink"],
-    .footnote-body a.footnote-backref {
-      display: none !important;
     }
     /* Light Theme */
     .light {
@@ -152,11 +166,15 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     .light button:hover {
       background: #cbd5e1;
     }
+    .light .font-size-badge {
+      background: rgba(0, 0, 0, 0.08);
+    }
   </style>
 </head>
 <body data-fragment="${initialFragment}">
   <header id="toolbar" aria-label="Reader controls">
     <button type="button" data-action="smaller" aria-label="Decrease text size">A−</button>
+    <span id="font-size-display" class="font-size-badge" aria-label="Current text size">18px</span>
     <button type="button" data-action="larger" aria-label="Increase text size">A+</button>
     <button type="button" data-action="theme" aria-label="Toggle reader theme">Theme</button>
   </header>
@@ -172,9 +190,15 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
     const popover = document.getElementById('footnote-popover');
     const caret = document.getElementById('footnote-caret');
     const noteContent = document.getElementById('footnote-content');
+    const fontSizeDisplay = document.getElementById('font-size-display');
     let size = 18;
 
-    const setSize = () => document.documentElement.style.setProperty('--reader-size', size + 'px');
+    const setSize = () => {
+      document.documentElement.style.setProperty('--reader-size', size + 'px');
+      if (fontSizeDisplay) {
+        fontSizeDisplay.textContent = size + 'px';
+      }
+    };
     const scrollToFragment = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     function hidePopover() {
@@ -212,16 +236,32 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
 
     function extractCleanFootnote(target) {
       const clone = target.cloneNode(true);
-      // Remove backlink elements
-      const backlinks = clone.querySelectorAll('a[role~="doc-backlink"], a[epub\\\\:type~="backlink"], a.footnote-backref, a.backlink');
-      backlinks.forEach((el) => el.remove());
 
-      // Strip trailing return character symbols (like ↩ or [back])
+      // Convert or remove internal return backlinks and reference anchors
+      const links = clone.querySelectorAll('a');
+      links.forEach((el) => {
+        const h = el.getAttribute('href') || '';
+        const role = el.getAttribute('role') || '';
+        const epubType = el.getAttribute('epub:type') || '';
+        if (role.includes('doc-backlink') || epubType.includes('backlink') || el.classList.contains('footnote-backref') || el.classList.contains('backlink')) {
+          el.remove();
+        } else if (h.startsWith('#')) {
+          // Replace with plain text (e.g. "1." instead of an active link to avoid accidental jumping)
+          el.replaceWith(document.createTextNode(el.textContent));
+        }
+      });
+
+      // Strip trailing return character symbols (like ↩, ↑, ↵)
       clone.innerHTML = clone.innerHTML.replace(/[\\s\\u00A0]*[\\u21A9\\u2191\\u21B5][\\s\\u00A0]*/g, '');
       return clone.innerHTML;
     }
 
     function showFootnotePopover(link, target) {
+      // Prevent focus jump
+      if (link && typeof link.blur === 'function') {
+        link.blur();
+      }
+
       noteContent.innerHTML = extractCleanFootnote(target);
       popover.hidden = false;
 
@@ -232,9 +272,10 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       const scrollY = window.scrollY || window.pageYOffset;
       const scrollX = window.scrollX || window.pageXOffset;
 
-      const spaceAbove = linkRect.top;
+      const toolbarHeight = 56;
+      const spaceAbove = linkRect.top - toolbarHeight;
       const spaceBelow = window.innerHeight - linkRect.bottom;
-      const placeAbove = spaceAbove >= popoverHeight + 14 || spaceAbove > spaceBelow;
+      const placeAbove = spaceAbove >= popoverHeight + 10;
 
       let top = 0;
       if (placeAbove) {
@@ -258,6 +299,15 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       // Caret horizontal alignment
       const caretLeft = Math.max(12, Math.min(popoverWidth - 22, linkCenter - left - 5));
       caret.style.left = caretLeft + 'px';
+
+      // Ensure viewport scroll position is not dragged or shifted
+      const lockScrollY = scrollY;
+      const lockScrollX = scrollX;
+      requestAnimationFrame(() => {
+        if (window.scrollY !== lockScrollY || window.scrollX !== lockScrollX) {
+          window.scrollTo(lockScrollX, lockScrollY);
+        }
+      });
     }
 
     // Toolbar actions
@@ -291,6 +341,8 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
 
       if (href.startsWith('#')) {
         event.preventDefault();
+        event.stopPropagation();
+
         const id = decodeURIComponent(href.slice(1));
         const target = document.getElementById(id);
 
