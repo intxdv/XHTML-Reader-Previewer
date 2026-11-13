@@ -22,6 +22,13 @@ export interface EpubSpineItem {
   uri: vscodeTypes.Uri;
 }
 
+export interface EpubTocItem {
+  id?: string;
+  label: string;
+  href: string;
+  uri: vscodeTypes.Uri;
+}
+
 export interface EpubPackage {
   containerRoot: vscodeTypes.Uri;
   opfUri: vscodeTypes.Uri;
@@ -31,6 +38,7 @@ export interface EpubPackage {
   language?: string;
   manifest: Map<string, EpubManifestItem>;
   spine: EpubSpineItem[];
+  toc: EpubTocItem[];
 }
 
 /**
@@ -146,8 +154,129 @@ export function parseOpfXml(xml: string, opfUri: vscodeTypes.Uri, containerRoot:
     creator,
     language,
     manifest,
-    spine
+    spine,
+    toc: []
   };
+}
+
+/**
+ * Parses EPUB 3 Navigation Document XHTML into TOC items.
+ */
+export function parseNavHtml(html: string, baseDir: vscodeTypes.Uri): EpubTocItem[] {
+  const items: EpubTocItem[] = [];
+  // Find <nav> with epub:type="toc" or id="toc", or fallback to any nav
+  const navMatch = /<nav\b(?=[^>]*\b(?:epub:type=["'][^"']*toc|id=["']toc))\b[^>]*>([\s\S]*?)<\/nav>/i.exec(html)
+    || /<nav\b[^>]*>([\s\S]*?)<\/nav>/i.exec(html)
+    || /<div\b(?=[^>]*\bid=["']chapters["'])[^>]*>([\s\S]*?)<\/div>/i.exec(html)
+    || /<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(html);
+
+  const content = navMatch ? navMatch[1] : html;
+  const linkRegex = /<a\b[^>]*\bhref\s*=\s*(["'])([^"']+)\1[^>]*>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkRegex.exec(content)) !== null) {
+    const rawHref = match[2].trim();
+    const rawLabel = match[3].replace(/<[^>]+>/g, '').trim();
+    if (!rawHref || !rawLabel) continue;
+
+    const label = decodeXmlEntities(rawLabel);
+    const decodedHref = decodeURIComponent(rawHref.split('#')[0]);
+    const segments = decodedHref.split('/').filter((s) => s && s !== '.');
+    const uri = joinPath(baseDir, ...segments);
+
+    items.push({
+      label,
+      href: rawHref,
+      uri
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Parses EPUB 2 NCX XML into TOC items.
+ */
+export function parseNcxXml(xml: string, baseDir: vscodeTypes.Uri): EpubTocItem[] {
+  const items: EpubTocItem[] = [];
+  const navPointRegex = /<navPoint\b[^>]*>([\s\S]*?)<\/navPoint>/gi;
+  let pointMatch: RegExpExecArray | null;
+
+  while ((pointMatch = navPointRegex.exec(xml)) !== null) {
+    const pointContent = pointMatch[1];
+    const textMatch = /<navLabel>\s*<text\b[^>]*>([\s\S]*?)<\/text>\s*<\/navLabel>/i.exec(pointContent);
+    const srcMatch = /<content\b[^>]*\bsrc\s*=\s*(["'])([^"']+)\1/i.exec(pointContent);
+
+    if (textMatch && srcMatch) {
+      const label = decodeXmlEntities(textMatch[1].trim());
+      const rawHref = srcMatch[2].trim();
+      const decodedHref = decodeURIComponent(rawHref.split('#')[0]);
+      const segments = decodedHref.split('/').filter((s) => s && s !== '.');
+      const uri = joinPath(baseDir, ...segments);
+
+      items.push({
+        label,
+        href: rawHref,
+        uri
+      });
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Discovers and parses the TOC for an EPUB package.
+ */
+export async function loadEpubToc(
+  epub: EpubPackage,
+  readFileText: (uri: vscodeTypes.Uri) => Promise<string>
+): Promise<EpubTocItem[]> {
+  // 1. Try finding nav item in manifest with properties="nav"
+  for (const item of epub.manifest.values()) {
+    if (item.properties && item.properties.split(/\s+/).includes('nav')) {
+      try {
+        const html = await readFileText(item.uri);
+        const parsed = parseNavHtml(html, parentUri(item.uri));
+        if (parsed.length > 0) return parsed;
+      } catch (err) {
+        console.warn('Error reading nav XHTML:', err);
+      }
+    }
+  }
+
+  // 2. Try item with id="toc" or href ending with toc.html / toc.xhtml
+  const tocHtmlItem = epub.manifest.get('toc')
+    || [...epub.manifest.values()].find((it) => /toc\.(?:x?html|htm)$/i.test(it.href));
+  if (tocHtmlItem) {
+    try {
+      const html = await readFileText(tocHtmlItem.uri);
+      const parsed = parseNavHtml(html, parentUri(tocHtmlItem.uri));
+      if (parsed.length > 0) return parsed;
+    } catch (err) {
+      console.warn('Error reading toc.html:', err);
+    }
+  }
+
+  // 3. Try NCX item (id="ncx" or media-type="application/x-dtbncx+xml" or toc.ncx)
+  const ncxItem = epub.manifest.get('ncx')
+    || [...epub.manifest.values()].find((it) => it.mediaType.includes('ncx') || it.href.endsWith('.ncx'));
+  if (ncxItem) {
+    try {
+      const xml = await readFileText(ncxItem.uri);
+      const parsed = parseNcxXml(xml, parentUri(ncxItem.uri));
+      if (parsed.length > 0) return parsed;
+    } catch (err) {
+      console.warn('Error reading toc.ncx:', err);
+    }
+  }
+
+  // 4. Fallback: generate from spine items
+  return epub.spine.map((sp, idx) => ({
+    label: `Chapter ${idx + 1} (${sp.href})`,
+    href: sp.href,
+    uri: sp.uri
+  }));
 }
 
 function getAttr(attrs: string, name: string): string | undefined {

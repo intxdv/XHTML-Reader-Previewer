@@ -59,3 +59,59 @@ test('parseOpfXml extracts title, creator, manifest, and spine in sequence', asy
   assert.equal(parsed.spine[1].idref, 'ch1');
   assert.equal(parsed.spine[2].idref, 'ch2');
 });
+
+test('parseNavHtml extracts TOC items from EPUB 3 Navigation document', async () => {
+  const epub = await import('../dist/epub.js');
+  const navHtml = `<!DOCTYPE html>
+<html>
+<body>
+  <nav epub:type="toc" id="toc">
+    <h2>Table of Contents</h2>
+    <ol>
+      <li><a href="ch_1.xhtml">Chapter 1: The Beginning</a></li>
+      <li><a href="ch_2.xhtml">Chapter 2: The Journey</a></li>
+    </ol>
+  </nav>
+</body>
+</html>`;
+
+  const mockBaseDir = {
+    path: '/project/OEBPS',
+    with(change) { return { ...this, ...change }; }
+  };
+
+  const toc = epub.parseNavHtml(navHtml, mockBaseDir);
+  assert.equal(toc.length, 2);
+  assert.equal(toc[0].label, 'Chapter 1: The Beginning');
+  assert.equal(toc[0].href, 'ch_1.xhtml');
+  assert.equal(toc[1].label, 'Chapter 2: The Journey');
+});
+
+test('parseNcxXml extracts TOC items from NCX XML', async () => {
+  const epub = await import('../dist/epub.js');
+  const ncxXml = `<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <navMap>
+    <navPoint id="p1" playOrder="1">
+      <navLabel><text>Prologue</text></navLabel>
+      <content src="intro.xhtml"/>
+    </navPoint>
+    <navPoint id="p2" playOrder="2">
+      <navLabel><text>Chapter 1</text></navLabel>
+      <content src="ch_1.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>`;
+
+  const mockBaseDir = {
+    path: '/project/OEBPS',
+    with(change) { return { ...this, ...change }; }
+  };
+
+  const toc = epub.parseNcxXml(ncxXml, mockBaseDir);
+  assert.equal(toc.length, 2);
+  assert.equal(toc[0].label, 'Prologue');
+  assert.equal(toc[0].href, 'intro.xhtml');
+  assert.equal(toc[1].label, 'Chapter 1');
+  assert.equal(toc[1].href, 'ch_1.xhtml');
+});

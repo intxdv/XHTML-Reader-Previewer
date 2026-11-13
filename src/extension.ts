@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { sanitizeXhtml } from './xhtml';
 import { readerShell, ReaderNavInfo } from './reader-shell';
-import { locateEpubContainer, parseContainerXml, parseOpfXml, EpubPackage } from './epub';
+import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './epub';
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
@@ -25,7 +25,7 @@ async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.View
   let currentSource = source;
   let pendingFragment: string | undefined;
 
-  // Attempt EPUB Package discovery
+  // Attempt EPUB Package discovery & TOC loading
   let epubPackage: EpubPackage | undefined;
   try {
     const containerRoot = await locateEpubContainer(source);
@@ -40,6 +40,12 @@ async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.View
         const opfBytes = await vscode.workspace.fs.readFile(opfUri);
         const opfXml = new TextDecoder('utf-8').decode(opfBytes);
         epubPackage = parseOpfXml(opfXml, opfUri, containerRoot);
+
+        // Load Table of Contents
+        epubPackage.toc = await loadEpubToc(epubPackage, async (itemUri) => {
+          const bytes = await vscode.workspace.fs.readFile(itemUri);
+          return new TextDecoder('utf-8').decode(bytes);
+        });
       }
     }
   } catch (error) {
@@ -70,12 +76,26 @@ async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.View
         (item) => item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
       ) ?? -1;
 
+      const currentFileName = currentSource.path.slice(currentSource.path.lastIndexOf('/') + 1).toLowerCase();
+      const tocWithActive = epubPackage?.toc.map((item) => {
+        const itemFileName = item.href.split(/[?#]/, 1)[0].split('/').pop()?.toLowerCase();
+        const isActive = item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
+          || (itemFileName && itemFileName === currentFileName);
+        return {
+          label: item.label,
+          href: item.href,
+          active: Boolean(isActive)
+        };
+      });
+
       const navInfo: ReaderNavInfo = {
         hasPrev: spineIndex > 0,
         hasNext: spineIndex >= 0 && spineIndex < (epubPackage?.spine.length ?? 0) - 1,
         bookTitle: epubPackage?.title,
+        creator: epubPackage?.creator,
         chapterIndex: spineIndex >= 0 ? spineIndex + 1 : undefined,
-        totalChapters: epubPackage?.spine.length
+        totalChapters: epubPackage?.spine.length,
+        toc: tocWithActive
       };
 
       panel.title = getPanelTitle(currentSource, epubPackage, spineIndex);
@@ -131,7 +151,7 @@ async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.View
     }
 
     if (isOpenLinkMessage(message)) {
-      const target = resolveChapterLink(message.href, currentSource, watchRoot);
+      const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
       if (target) {
         currentSource = target.source;
         pendingFragment = target.fragment;
@@ -185,7 +205,12 @@ function isOpenLinkMessage(message: unknown): message is { type: 'openLink'; hre
     && typeof (message as { href?: unknown }).href === 'string';
 }
 
-function resolveChapterLink(href: string, source: vscode.Uri, root: vscode.Uri): { source: vscode.Uri; fragment?: string } | undefined {
+function resolveChapterLink(
+  href: string,
+  source: vscode.Uri,
+  root: vscode.Uri,
+  fallbackDir?: vscode.Uri
+): { source: vscode.Uri; fragment?: string } | undefined {
   const [path, fragment] = href.split('#', 2);
   if (!path || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(path)) {
     return undefined;
@@ -194,10 +219,16 @@ function resolveChapterLink(href: string, source: vscode.Uri, root: vscode.Uri):
   try {
     const segments = path.split('/').map(decodeURIComponent);
     const target = vscode.Uri.joinPath(parentUri(source), ...segments);
-    if (!target.path.toLowerCase().startsWith(`${root.path.toLowerCase()}/`) || !supportedExtensions.has(extensionOf(target))) {
-      return undefined;
+    if (target.path.toLowerCase().startsWith(`${root.path.toLowerCase()}/`) && supportedExtensions.has(extensionOf(target))) {
+      return { source: target, fragment: fragment ? decodeURIComponent(fragment) : undefined };
     }
-    return { source: target, fragment: fragment ? decodeURIComponent(fragment) : undefined };
+    if (fallbackDir) {
+      const fallbackTarget = vscode.Uri.joinPath(fallbackDir, ...segments);
+      if (fallbackTarget.path.toLowerCase().startsWith(`${root.path.toLowerCase()}/`) && supportedExtensions.has(extensionOf(fallbackTarget))) {
+        return { source: fallbackTarget, fragment: fragment ? decodeURIComponent(fragment) : undefined };
+      }
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -281,11 +312,5 @@ function errorShell(error: unknown): string {
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>'"]/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;'
-  })[character] ?? character);
+  return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
 }

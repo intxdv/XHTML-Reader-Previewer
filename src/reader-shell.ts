@@ -1,12 +1,20 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
 
+export interface ReaderTocItem {
+  label: string;
+  href: string;
+  active?: boolean;
+}
+
 export interface ReaderNavInfo {
   hasPrev?: boolean;
   hasNext?: boolean;
   bookTitle?: string;
+  creator?: string;
   chapterIndex?: number;
   totalChapters?: number;
+  toc?: ReaderTocItem[];
 }
 
 export function readerShell(
@@ -21,6 +29,12 @@ export function readerShell(
   const initialFragment = escapeHtml(fragment ?? '');
 
   const hasNav = navInfo && typeof navInfo.totalChapters === 'number' && navInfo.totalChapters > 0;
+  const hasToc = navInfo && Array.isArray(navInfo.toc) && navInfo.toc.length > 0;
+
+  const tocBtnHtml = hasToc
+    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)">☰ Contents</button>`
+    : '';
+
   const navHtml = hasNav
     ? `<div class="toolbar-separator"></div>
     <div class="toolbar-group nav-group">
@@ -28,6 +42,34 @@ export function readerShell(
       <span class="chapter-badge" title="${escapeHtml(navInfo.bookTitle || '')}">${navInfo.chapterIndex ?? 1} / ${navInfo.totalChapters}</span>
       <button type="button" data-action="next-chapter" id="next-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo.hasNext ? '' : 'disabled'}>Next →</button>
     </div>`
+    : '';
+
+  const tocItemsHtml = (navInfo?.toc || [])
+    .map((item) => {
+      const activeClass = item.active ? ' active' : '';
+      return `<a href="${escapeHtml(item.href)}" class="toc-item${activeClass}" data-href="${escapeHtml(item.href)}">
+        <span class="toc-item-label">${escapeHtml(item.label)}</span>
+      </a>`;
+    })
+    .join('');
+
+  const sidebarHtml = hasToc
+    ? `<aside id="toc-sidebar" class="toc-sidebar" aria-label="Table of Contents">
+      <div class="toc-header">
+        <div class="toc-book-info">
+          <div class="toc-book-title">${escapeHtml(navInfo?.bookTitle || 'Table of Contents')}</div>
+          ${navInfo?.creator ? `<div class="toc-book-author">${escapeHtml(navInfo.creator)}</div>` : ''}
+        </div>
+        <button type="button" data-action="close-toc" class="toc-close-btn" aria-label="Close Table of Contents">✕</button>
+      </div>
+      <div class="toc-search-wrap">
+        <input type="text" id="toc-search" placeholder="Filter chapters..." aria-label="Filter chapters" />
+      </div>
+      <nav class="toc-list" id="toc-list">
+        ${tocItemsHtml}
+      </nav>
+    </aside>
+    <div id="toc-backdrop" class="toc-backdrop"></div>`
     : '';
 
   return `<!DOCTYPE html>
@@ -52,6 +94,10 @@ export function readerShell(
       --popover-fg: #f3f4f6;
       --popover-border: #374151;
       --popover-shadow: 0 10px 25px -5px rgba(0,0,0,0.6), 0 8px 10px -6px rgba(0,0,0,0.5);
+      --toc-bg: #131722;
+      --toc-item-hover: rgba(255, 255, 255, 0.06);
+      --toc-item-active-bg: rgba(147, 197, 253, 0.12);
+      --toc-item-active-fg: #93c5fd;
     }
     body {
       background: var(--reader-bg);
@@ -158,6 +204,119 @@ export function readerShell(
       background: var(--reader-link);
       transition: width 0.08s linear;
     }
+
+    /* TOC Sidebar & Backdrop */
+    .toc-sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: min(22rem, 85vw);
+      background: var(--toc-bg);
+      color: var(--reader-fg);
+      border-right: 1px solid var(--popover-border);
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+      transform: translateX(-100%);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+    }
+    .toc-sidebar.open {
+      transform: translateX(0);
+    }
+    .toc-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(2px);
+      z-index: 45;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .toc-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .toc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1rem 1.1rem 0.75rem;
+      border-bottom: 1px solid rgba(156, 163, 175, 0.15);
+    }
+    .toc-book-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      line-height: 1.35;
+      color: var(--reader-fg);
+    }
+    .toc-book-author {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.2rem;
+    }
+    .toc-close-btn {
+      background: transparent;
+      border: none;
+      color: inherit;
+      font-size: 1.1rem;
+      padding: 0.2rem 0.4rem;
+      cursor: pointer;
+      opacity: 0.75;
+      border-radius: 4px;
+    }
+    .toc-close-btn:hover {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .toc-search-wrap {
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid rgba(156, 163, 175, 0.1);
+    }
+    .toc-search-wrap input {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(156, 163, 175, 0.2);
+      border-radius: 4px;
+      padding: 0.4rem 0.65rem;
+      color: inherit;
+      font-size: 0.82rem;
+      outline: none;
+    }
+    .toc-search-wrap input:focus {
+      border-color: var(--reader-link);
+    }
+    .toc-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem 0;
+      scrollbar-width: thin;
+    }
+    .toc-item {
+      display: block;
+      padding: 0.6rem 1.1rem;
+      color: var(--reader-fg);
+      text-decoration: none;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      border-left: 3px solid transparent;
+      transition: background 0.12s ease;
+      cursor: pointer;
+    }
+    .toc-item:hover {
+      background: var(--toc-item-hover);
+    }
+    .toc-item.active {
+      background: var(--toc-item-active-bg);
+      color: var(--toc-item-active-fg);
+      border-left-color: var(--toc-item-active-fg);
+      font-weight: 600;
+    }
+
     /* Anchored Footnote Popover */
     .footnote-popover {
       position: absolute;
@@ -220,6 +379,7 @@ export function readerShell(
     .footnote-body p {
       margin: 0.25rem 0;
     }
+
     /* Light Theme */
     .light {
       --reader-bg: #f8fafc;
@@ -229,6 +389,10 @@ export function readerShell(
       --popover-fg: #1e293b;
       --popover-border: #cbd5e1;
       --popover-shadow: 0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1);
+      --toc-bg: #f1f5f9;
+      --toc-item-hover: rgba(0, 0, 0, 0.05);
+      --toc-item-active-bg: rgba(29, 78, 216, 0.08);
+      --toc-item-active-fg: #1d4ed8;
     }
     .light #toolbar {
       background: #f8fafce8;
@@ -245,6 +409,11 @@ export function readerShell(
     .light .font-size-badge, .light .chapter-badge {
       background: rgba(0, 0, 0, 0.08);
     }
+    .light .toc-search-wrap input {
+      background: #ffffff;
+      border-color: #cbd5e1;
+    }
+
     /* Sepia Theme */
     .sepia {
       --reader-bg: #fbf0d9;
@@ -254,6 +423,10 @@ export function readerShell(
       --popover-fg: #453216;
       --popover-border: #d4bc91;
       --popover-shadow: 0 10px 25px -5px rgba(95,75,50,0.15), 0 8px 10px -6px rgba(95,75,50,0.1);
+      --toc-bg: #f3e6ce;
+      --toc-item-hover: rgba(95, 75, 50, 0.07);
+      --toc-item-active-bg: rgba(146, 64, 14, 0.12);
+      --toc-item-active-fg: #92400e;
     }
     .sepia #toolbar {
       background: #fbf0d9e8;
@@ -270,10 +443,16 @@ export function readerShell(
     .sepia .font-size-badge, .sepia .chapter-badge {
       background: rgba(95, 75, 50, 0.08);
     }
+    .sepia .toc-search-wrap input {
+      background: #faf4e8;
+      border-color: #d4bc91;
+    }
   </style>
 </head>
 <body data-fragment="${initialFragment}">
   <header id="toolbar" aria-label="Reader controls">
+    ${tocBtnHtml}
+
     <div class="toolbar-group">
       <button type="button" data-action="smaller" aria-label="Decrease text size">A−</button>
       <span id="font-size-display" class="font-size-badge" aria-label="Current text size">18px</span>
@@ -294,6 +473,8 @@ export function readerShell(
     </div>
   </header>
 
+  ${sidebarHtml}
+
   <main>${content.replace(/<style\b/gi, `<style nonce="${nonce}"`)}</main>
 
   <div id="footnote-popover" class="footnote-popover" role="dialog" aria-modal="false" aria-label="Footnote" hidden>
@@ -312,6 +493,9 @@ export function readerShell(
     const spacingBtn = document.getElementById('spacing-btn');
     const widthBtn = document.getElementById('width-btn');
     const progressBar = document.getElementById('progress-bar');
+    const tocSidebar = document.getElementById('toc-sidebar');
+    const tocBackdrop = document.getElementById('toc-backdrop');
+    const tocSearch = document.getElementById('toc-search');
 
     let size = 18;
     const themes = ['dark', 'light', 'sepia'];
@@ -351,6 +535,21 @@ export function readerShell(
       }
     }
 
+    function toggleToc(open) {
+      if (!tocSidebar) return;
+      const isOpen = open !== undefined ? open : !tocSidebar.classList.contains('open');
+      if (isOpen) {
+        tocSidebar.classList.add('open');
+        tocBackdrop?.classList.add('open');
+        // Scroll active item into view
+        const activeItem = tocSidebar.querySelector('.toc-item.active');
+        activeItem?.scrollIntoView({ block: 'center' });
+      } else {
+        tocSidebar.classList.remove('open');
+        tocBackdrop?.classList.remove('open');
+      }
+    }
+
     function updateProgress() {
       const scrollY = window.scrollY || document.documentElement.scrollTop;
       const docHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -361,6 +560,18 @@ export function readerShell(
     }
     window.addEventListener('scroll', updateProgress, { passive: true });
     updateProgress();
+
+    // TOC search filter
+    if (tocSearch) {
+      tocSearch.addEventListener('input', () => {
+        const query = tocSearch.value.trim().toLowerCase();
+        const items = document.querySelectorAll('.toc-item');
+        items.forEach((item) => {
+          const text = (item.textContent || '').toLowerCase();
+          item.style.display = text.includes(query) ? '' : 'none';
+        });
+      });
+    }
 
     function isFootnoteLink(link, href) {
       if (!href.startsWith('#')) return false;
@@ -461,6 +672,9 @@ export function readerShell(
       if (!button) return;
       const action = button.dataset.action;
 
+      if (action === 'toggle-toc') {
+        toggleToc();
+      }
       if (action === 'smaller') {
         size = Math.max(12, size - 1);
         setSize();
@@ -504,6 +718,13 @@ export function readerShell(
       }
     });
 
+    // Close TOC button and backdrop click
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('[data-action="close-toc"]') || event.target === tocBackdrop) {
+        toggleToc(false);
+      }
+    });
+
     // Link handling & footnote interception
     document.addEventListener('click', (event) => {
       const link = event.target.closest('a[href]');
@@ -516,6 +737,14 @@ export function readerShell(
 
       const href = link.getAttribute('href');
       if (!href) return;
+
+      // Handle TOC item click
+      if (link.classList.contains('toc-item')) {
+        event.preventDefault();
+        toggleToc(false);
+        vscode.postMessage({ type: 'openLink', href });
+        return;
+      }
 
       if (href.startsWith('#')) {
         event.preventDefault();
@@ -545,7 +774,17 @@ export function readerShell(
     // Keyboard shortcuts
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
+        if (tocSidebar && tocSidebar.classList.contains('open')) {
+          toggleToc(false);
+          return;
+        }
         hidePopover();
+      }
+      if (event.key === 't' || event.key === 'T') {
+        // Only toggle if not typing in search box
+        if (document.activeElement !== tocSearch) {
+          toggleToc();
+        }
       }
       if (event.key === '[' || (event.altKey && event.key === 'ArrowLeft')) {
         vscode.postMessage({ type: 'prevChapter' });

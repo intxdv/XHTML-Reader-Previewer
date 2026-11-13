@@ -38,3 +38,15 @@ test('readerShell contains advanced typography controls and sepia theme', async 
   assert.match(extensionBundle, /id=["']progress-bar["']/);
   assert.match(extensionBundle, /updateProgress/);
 });
+
+test('readerShell contains TOC sidebar, backdrop, search filter, and toggle button', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify TOC elements
+  assert.match(extensionBundle, /id=["']toc-btn["']/);
+  assert.match(extensionBundle, /id=["']toc-sidebar["']/);
+  assert.match(extensionBundle, /id=["']toc-backdrop["']/);
+  assert.match(extensionBundle, /id=["']toc-search["']/);
+  assert.match(extensionBundle, /toggleToc/);
+});
