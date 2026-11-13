@@ -103,7 +103,15 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       line-height: 1.6;
       box-sizing: border-box;
       overflow: visible;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
       animation: popoverFadeIn 0.12s ease-out;
+    }
+    .footnote-popover::-webkit-scrollbar,
+    .footnote-body::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
     }
     .footnote-popover[hidden] {
       display: none !important;
@@ -136,11 +144,8 @@ export function readerShell(content: string, source: vscode.Uri, fragment: strin
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       max-height: 45vh;
       overflow-y: auto;
-      scrollbar-width: none; /* Hide scrollbar */
-      -ms-overflow-style: none;
-    }
-    .footnote-body::-webkit-scrollbar {
-      display: none; /* Hide Chrome/WebKit scrollbar */
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
     }
     .footnote-body p {
       margin: 0.25rem 0;
