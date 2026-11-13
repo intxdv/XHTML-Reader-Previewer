@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { randomBytes } from 'node:crypto';
 import { sanitizeXhtml } from './xhtml';
+import { readerShell } from './reader-shell';
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
@@ -165,23 +165,6 @@ function parentUri(uri: vscode.Uri): vscode.Uri {
 function extensionOf(uri: vscode.Uri): string {
   const match = /\.[^.]+$/.exec(uri.path);
   return match?.[0].toLowerCase() ?? '';
-}
-
-function readerShell(content: string, source: vscode.Uri, fragment: string | undefined, webview: vscode.Webview): string {
-  const nonce = randomBytes(16).toString('base64');
-  const title = escapeHtml(vscode.workspace.asRelativePath(source, false) || source.fsPath);
-  const initialFragment = escapeHtml(fragment ?? '');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource}; media-src ${webview.cspSource}; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style nonce="${nonce}">:root{--reader-size:18px;--reader-bg:#111827;--reader-fg:#e5e7eb;--reader-link:#93c5fd}body{background:var(--reader-bg);color:var(--reader-fg);font:var(--reader-size)/1.8 Georgia,serif;margin:0;padding:4.5rem 1.5rem 3rem}main{max-width:42rem;margin:auto}img,video{display:block;max-width:100%;height:auto;margin:1.5rem auto}a{color:var(--reader-link)}hr{border:0;border-top:1px solid #374151;margin:2rem 0}#toolbar{position:fixed;z-index:1;top:0;left:0;right:0;display:flex;gap:.5rem;align-items:center;padding:.65rem 1rem;background:#111827e8;border-bottom:1px solid #374151;font-family:var(--vscode-font-family,system-ui)}button{color:inherit;background:#1f2937;border:1px solid #4b5563;border-radius:.35rem;padding:.3rem .55rem;cursor:pointer}dialog{max-width:min(34rem,calc(100vw - 2rem));max-height:70vh;overflow:auto;background:#1f2937;color:#f3f4f6;border:1px solid #6b7280;border-radius:.5rem;padding:1rem}dialog::backdrop{background:#0009}.light{--reader-bg:#f8fafc;--reader-fg:#172033;--reader-link:#1d4ed8}.light #toolbar{background:#f8fafce8}.light button{background:#e2e8f0;color:#172033}</style>
-</head>
-<body data-fragment="${initialFragment}"><header id="toolbar" aria-label="Reader controls"><button type="button" data-action="smaller" aria-label="Decrease text size">A−</button><button type="button" data-action="larger" aria-label="Increase text size">A+</button><button type="button" data-action="theme" aria-label="Toggle reader theme">Theme</button></header><main>${content.replace(/<style\b/gi, `<style nonce="${nonce}"`)}</main><dialog id="footnote"><button type="button" data-action="close-note">Close</button><div id="footnote-content"></div></dialog><script nonce="${nonce}">const vscode=acquireVsCodeApi();const dialog=document.getElementById('footnote');const noteContent=document.getElementById('footnote-content');let size=18;const setSize=()=>document.documentElement.style.setProperty('--reader-size',size+'px');const scrollToFragment=(id)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('toolbar').addEventListener('click',(event)=>{const action=event.target.dataset.action;if(action==='smaller'){size=Math.max(12,size-1);setSize()}if(action==='larger'){size=Math.min(32,size+1);setSize()}if(action==='theme'){document.documentElement.classList.toggle('light')}});document.addEventListener('click',(event)=>{const button=event.target.closest('[data-action="close-note"]');if(button){dialog.close();return}const link=event.target.closest('a[href]');if(!link)return;const href=link.getAttribute('href');if(!href)return;const isNote=(link.getAttribute('epub:type')||'').split(/\\s+/).includes('noteref')||(link.getAttribute('role')||'').split(/\\s+/).includes('doc-noteref');if(href.startsWith('#')){event.preventDefault();const id=decodeURIComponent(href.slice(1));const target=document.getElementById(id);if(isNote&&target){noteContent.innerHTML=target.innerHTML;dialog.showModal();return}scrollToFragment(id);return}if(!/^(?:[a-z][a-z0-9+.-]*:|\\/\\/)/i.test(href)){event.preventDefault();vscode.postMessage({type:'openLink',href})}});const initial=document.body.dataset.fragment;if(initial)scrollToFragment(initial);</script></body>
-</html>`;
 }
 
 function errorShell(error: unknown): string {
