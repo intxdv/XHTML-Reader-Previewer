@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
+import { ReaderPreferences, ReadingLocation, DEFAULT_PREFERENCES } from './state-manager';
 
 export interface ReaderTocItem {
   label: string;
@@ -17,16 +18,71 @@ export interface ReaderNavInfo {
   toc?: ReaderTocItem[];
 }
 
+const fontCssMap: Record<string, string> = {
+  serif: 'Georgia, "Times New Roman", serif',
+  sans: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  mono: '"Cascadia Code", Consolas, "Courier New", monospace'
+};
+
+const fontLabelMap: Record<string, string> = {
+  serif: 'Font: Serif',
+  sans: 'Font: Sans',
+  mono: 'Font: Mono'
+};
+
+const spacingValMap: Record<string, string> = {
+  normal: '1.8',
+  relaxed: '2.1',
+  tight: '1.5'
+};
+
+const spacingLabelMap: Record<string, string> = {
+  normal: 'Spacing: Normal',
+  relaxed: 'Spacing: Relaxed',
+  tight: 'Spacing: Tight'
+};
+
+const widthValMap: Record<string, string> = {
+  normal: '44rem',
+  wide: '54rem',
+  compact: '36rem'
+};
+
+const widthLabelMap: Record<string, string> = {
+  normal: 'Width: Normal',
+  wide: 'Width: Wide',
+  compact: 'Width: Compact'
+};
+
 export function readerShell(
   content: string,
   source: vscode.Uri,
   fragment: string | undefined,
   webview: vscode.Webview,
-  navInfo?: ReaderNavInfo
+  navInfo?: ReaderNavInfo,
+  preferences?: ReaderPreferences,
+  initialLocation?: ReadingLocation
 ): string {
   const nonce = randomBytes(16).toString('base64');
   const title = escapeHtml(vscode.workspace.asRelativePath(source, false) || source.fsPath);
   const initialFragment = escapeHtml(fragment ?? '');
+
+  const prefs: ReaderPreferences = {
+    theme: preferences?.theme ?? DEFAULT_PREFERENCES.theme,
+    fontSize: preferences?.fontSize ?? DEFAULT_PREFERENCES.fontSize,
+    fontFamily: preferences?.fontFamily ?? DEFAULT_PREFERENCES.fontFamily,
+    lineHeight: preferences?.lineHeight ?? DEFAULT_PREFERENCES.lineHeight,
+    readerWidth: preferences?.readerWidth ?? DEFAULT_PREFERENCES.readerWidth
+  };
+
+  const htmlClass = prefs.theme === 'dark' ? '' : ` class="${prefs.theme}"`;
+  const initialLineHeight = spacingValMap[prefs.lineHeight] ?? '1.8';
+  const initialMaxWidth = widthValMap[prefs.readerWidth] ?? '44rem';
+  const initialFontCss = fontCssMap[prefs.fontFamily] ?? fontCssMap.serif;
+  const initialThemeLabel = `Theme: ${prefs.theme.charAt(0).toUpperCase() + prefs.theme.slice(1)}`;
+  const initialFontLabel = fontLabelMap[prefs.fontFamily] ?? 'Font: Serif';
+  const initialSpacingLabel = spacingLabelMap[prefs.lineHeight] ?? 'Spacing: Normal';
+  const initialWidthLabel = widthLabelMap[prefs.readerWidth] ?? 'Width: Normal';
 
   const hasNav = navInfo && typeof navInfo.totalChapters === 'number' && navInfo.totalChapters > 0;
   const hasToc = navInfo && Array.isArray(navInfo.toc) && navInfo.toc.length > 0;
@@ -73,7 +129,7 @@ export function readerShell(
     : '';
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${htmlClass}>
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource}; media-src ${webview.cspSource}; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'">
@@ -81,10 +137,10 @@ export function readerShell(
   <title>${title}</title>
   <style nonce="${nonce}">
     :root {
-      --reader-size: 18px;
-      --reader-line-height: 1.8;
-      --reader-max-width: 44rem;
-      --reader-font: Georgia, "Times New Roman", serif;
+      --reader-size: ${prefs.fontSize}px;
+      --reader-line-height: ${initialLineHeight};
+      --reader-max-width: ${initialMaxWidth};
+      --reader-font: ${initialFontCss};
 
       /* Dark Theme (Default) */
       --reader-bg: #111827;
@@ -449,22 +505,22 @@ export function readerShell(
     }
   </style>
 </head>
-<body data-fragment="${initialFragment}">
+<body data-fragment="${initialFragment}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}">
   <header id="toolbar" aria-label="Reader controls">
     ${tocBtnHtml}
 
     <div class="toolbar-group">
       <button type="button" data-action="smaller" aria-label="Decrease text size">A−</button>
-      <span id="font-size-display" class="font-size-badge" aria-label="Current text size">18px</span>
+      <span id="font-size-display" class="font-size-badge" aria-label="Current text size">${prefs.fontSize}px</span>
       <button type="button" data-action="larger" aria-label="Increase text size">A+</button>
     </div>
 
     <div class="toolbar-separator"></div>
 
-    <button type="button" data-action="theme" id="theme-btn" aria-label="Change theme">Theme: Dark</button>
-    <button type="button" data-action="font" id="font-btn" aria-label="Change font">Font: Serif</button>
-    <button type="button" data-action="spacing" id="spacing-btn" aria-label="Change line height">Spacing: Normal</button>
-    <button type="button" data-action="width" id="width-btn" aria-label="Change content width">Width: Normal</button>
+    <button type="button" data-action="theme" id="theme-btn" aria-label="Change theme">${initialThemeLabel}</button>
+    <button type="button" data-action="font" id="font-btn" aria-label="Change font">${initialFontLabel}</button>
+    <button type="button" data-action="spacing" id="spacing-btn" aria-label="Change line height">${initialSpacingLabel}</button>
+    <button type="button" data-action="width" id="width-btn" aria-label="Change content width">${initialWidthLabel}</button>
 
     ${navHtml}
 
@@ -475,7 +531,7 @@ export function readerShell(
 
   ${sidebarHtml}
 
-  <main>${content.replace(/<style\b/gi, `<style nonce="${nonce}"`)}</main>
+  <main id="content">${content.replace(/<style\b/gi, `<style nonce="${nonce}"`)}</main>
 
   <div id="footnote-popover" class="footnote-popover" role="dialog" aria-modal="false" aria-label="Footnote" hidden>
     <div id="footnote-caret" class="footnote-caret"></div>
@@ -497,34 +553,48 @@ export function readerShell(
     const tocBackdrop = document.getElementById('toc-backdrop');
     const tocSearch = document.getElementById('toc-search');
 
-    let size = 18;
+    let size = ${prefs.fontSize};
     const themes = ['dark', 'light', 'sepia'];
-    let themeIndex = 0;
+    let themeIndex = ${Math.max(0, ['dark', 'light', 'sepia'].indexOf(prefs.theme))};
 
     const fonts = [
       { id: 'serif', label: 'Font: Serif', css: 'Georgia, "Times New Roman", serif' },
       { id: 'sans', label: 'Font: Sans', css: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
       { id: 'mono', label: 'Font: Mono', css: '"Cascadia Code", Consolas, "Courier New", monospace' }
     ];
-    let fontIndex = 0;
+    let fontIndex = ${Math.max(0, ['serif', 'sans', 'mono'].indexOf(prefs.fontFamily))};
 
     const spacings = [
       { id: 'normal', label: 'Spacing: Normal', val: '1.8' },
       { id: 'relaxed', label: 'Spacing: Relaxed', val: '2.1' },
       { id: 'tight', label: 'Spacing: Tight', val: '1.5' }
     ];
-    let spacingIndex = 0;
+    let spacingIndex = ${Math.max(0, ['normal', 'relaxed', 'tight'].indexOf(prefs.lineHeight))};
 
     const widths = [
       { id: 'normal', label: 'Width: Normal', val: '44rem' },
       { id: 'wide', label: 'Width: Wide', val: '54rem' },
       { id: 'compact', label: 'Width: Compact', val: '36rem' }
     ];
-    let widthIndex = 0;
+    let widthIndex = ${Math.max(0, ['normal', 'wide', 'compact'].indexOf(prefs.readerWidth))};
+
+    function notifyPreferences() {
+      vscode.postMessage({
+        type: 'savePreferences',
+        preferences: {
+          theme: themes[themeIndex],
+          fontSize: size,
+          fontFamily: fonts[fontIndex].id,
+          lineHeight: spacings[spacingIndex].id,
+          readerWidth: widths[widthIndex].id
+        }
+      });
+    }
 
     const setSize = () => {
       document.documentElement.style.setProperty('--reader-size', size + 'px');
       if (fontSizeDisplay) fontSizeDisplay.textContent = size + 'px';
+      notifyPreferences();
     };
 
     const scrollToFragment = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -558,7 +628,43 @@ export function readerShell(
         progressBar.style.width = pct + '%';
       }
     }
-    window.addEventListener('scroll', updateProgress, { passive: true });
+
+    let scrollSaveTimer = null;
+    function scheduleSaveReadingPosition() {
+      if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+      scrollSaveTimer = setTimeout(() => {
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const ratio = docHeight > 0 ? Math.min(1, Math.max(0, scrollY / docHeight)) : 0;
+
+        let anchorId = undefined;
+        const contentEl = document.getElementById('content') || document.querySelector('main');
+        if (contentEl) {
+          const candidates = contentEl.querySelectorAll('[id]');
+          for (let i = 0; i < candidates.length; i++) {
+            const el = candidates[i];
+            if (el.id === 'footnote-popover' || el.id === 'footnote-caret' || el.id === 'footnote-content') continue;
+            const rect = el.getBoundingClientRect();
+            if (rect.top >= 0 && rect.top <= window.innerHeight * 0.5) {
+              anchorId = el.id;
+              break;
+            }
+          }
+        }
+
+        vscode.postMessage({
+          type: 'saveReadingPosition',
+          scrollRatio: ratio,
+          scrollY: Math.round(scrollY),
+          anchorId: anchorId
+        });
+      }, 200);
+    }
+
+    window.addEventListener('scroll', () => {
+      updateProgress();
+      scheduleSaveReadingPosition();
+    }, { passive: true });
     updateProgress();
 
     // TOC search filter
@@ -691,24 +797,28 @@ export function readerShell(
           document.documentElement.classList.add(nextTheme);
         }
         themeBtn.textContent = 'Theme: ' + nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1);
+        notifyPreferences();
       }
       if (action === 'font') {
         fontIndex = (fontIndex + 1) % fonts.length;
         const font = fonts[fontIndex];
         document.documentElement.style.setProperty('--reader-font', font.css);
         fontBtn.textContent = font.label;
+        notifyPreferences();
       }
       if (action === 'spacing') {
         spacingIndex = (spacingIndex + 1) % spacings.length;
         const sp = spacings[spacingIndex];
         document.documentElement.style.setProperty('--reader-line-height', sp.val);
         spacingBtn.textContent = sp.label;
+        notifyPreferences();
       }
       if (action === 'width') {
         widthIndex = (widthIndex + 1) % widths.length;
         const w = widths[widthIndex];
         document.documentElement.style.setProperty('--reader-max-width', w.val);
         widthBtn.textContent = w.label;
+        notifyPreferences();
       }
       if (action === 'prev-chapter') {
         vscode.postMessage({ type: 'prevChapter' });
@@ -798,7 +908,44 @@ export function readerShell(
     window.addEventListener('resize', hidePopover);
 
     const initial = document.body.dataset.fragment;
-    if (initial) scrollToFragment(initial);
+    const initialRatio = parseFloat(document.body.dataset.initialRatio || '0');
+    const initialScrollY = parseFloat(document.body.dataset.initialScrollY || '0');
+    const initialAnchorId = document.body.dataset.initialAnchorId || '';
+
+    let userScrolled = false;
+    window.addEventListener('wheel', () => { userScrolled = true; }, { passive: true, once: true });
+    window.addEventListener('touchmove', () => { userScrolled = true; }, { passive: true, once: true });
+
+    function restorePosition() {
+      if (userScrolled) return;
+      if (initial) {
+        scrollToFragment(initial);
+        return;
+      }
+      if (initialAnchorId) {
+        const target = document.getElementById(initialAnchorId);
+        if (target) {
+          target.scrollIntoView({ behavior: 'instant', block: 'start' });
+          return;
+        }
+      }
+      if (initialScrollY > 0) {
+        window.scrollTo({ top: initialScrollY, behavior: 'instant' });
+      } else if (initialRatio > 0) {
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight > 0) {
+          window.scrollTo({ top: initialRatio * docHeight, behavior: 'instant' });
+        }
+      }
+    }
+
+    restorePosition();
+    requestAnimationFrame(restorePosition);
+    window.addEventListener('load', () => {
+      if (!userScrolled) {
+        restorePosition();
+      }
+    });
   </script>
 </body>
 </html>`;

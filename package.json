@@ -42,7 +42,7 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js && esbuild src/xhtml.ts --bundle --platform=node --format=cjs --outfile=dist/xhtml.js && esbuild src/epub.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/epub.js",
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js && esbuild src/xhtml.ts --bundle --platform=node --format=cjs --outfile=dist/xhtml.js && esbuild src/epub.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/epub.js && esbuild src/state-manager.ts --bundle --platform=node --format=cjs --outfile=dist/state-manager.js",
     "check": "tsc --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",
     "watch": "npm run build -- --watch"

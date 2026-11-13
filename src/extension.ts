@@ -2,18 +2,25 @@ import * as vscode from 'vscode';
 import { sanitizeXhtml } from './xhtml';
 import { readerShell, ReaderNavInfo } from './reader-shell';
 import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './epub';
+import { StateManager, ReaderPreferences } from './state-manager';
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
 
 export function activate(context: vscode.ExtensionContext): void {
+  const stateManager = new StateManager(context.workspaceState);
+
   context.subscriptions.push(
-    vscode.commands.registerCommand('xhtmlReader.openPreview', (uri?: vscode.Uri) => openPreview(uri)),
-    vscode.commands.registerCommand('xhtmlReader.openSplitPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Beside)),
+    vscode.commands.registerCommand('xhtmlReader.openPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Active, stateManager)),
+    vscode.commands.registerCommand('xhtmlReader.openSplitPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Beside, stateManager)),
   );
 }
 
-async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.ViewColumn.Active): Promise<void> {
+async function openPreview(
+  uri: vscode.Uri | undefined,
+  viewColumn = vscode.ViewColumn.Active,
+  stateManager?: StateManager
+): Promise<void> {
   const source = uri ?? vscode.window.activeTextEditor?.document.uri;
 
   if (!source || !supportedExtensions.has(extensionOf(source))) {
@@ -99,7 +106,9 @@ async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.View
       };
 
       panel.title = getPanelTitle(currentSource, epubPackage, spineIndex);
-      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo);
+      const preferences = stateManager?.getPreferences();
+      const location = stateManager?.getReadingLocation(currentSource.toString());
+      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location);
       pendingFragment = undefined;
     } catch (error) {
       panel.webview.html = errorShell(error);
@@ -147,6 +156,20 @@ async function openPreview(uri: vscode.Uri | undefined, viewColumn = vscode.View
           void render();
         }
       }
+      return;
+    }
+
+    if (isSavePreferencesMessage(message)) {
+      void stateManager?.savePreferences(message.preferences);
+      return;
+    }
+
+    if (isSaveReadingPositionMessage(message)) {
+      void stateManager?.saveReadingLocation(currentSource.toString(), {
+        scrollRatio: message.scrollRatio,
+        scrollY: message.scrollY,
+        anchorId: message.anchorId
+      });
       return;
     }
 
@@ -203,6 +226,29 @@ function isOpenLinkMessage(message: unknown): message is { type: 'openLink'; hre
     && message !== null
     && (message as { type?: unknown }).type === 'openLink'
     && typeof (message as { href?: unknown }).href === 'string';
+}
+
+function isSavePreferencesMessage(message: unknown): message is {
+  type: 'savePreferences';
+  preferences: Partial<ReaderPreferences>;
+} {
+  return typeof message === 'object'
+    && message !== null
+    && (message as { type?: unknown }).type === 'savePreferences'
+    && typeof (message as { preferences?: unknown }).preferences === 'object';
+}
+
+function isSaveReadingPositionMessage(message: unknown): message is {
+  type: 'saveReadingPosition';
+  scrollRatio: number;
+  scrollY: number;
+  anchorId?: string;
+} {
+  return typeof message === 'object'
+    && message !== null
+    && (message as { type?: unknown }).type === 'saveReadingPosition'
+    && typeof (message as { scrollRatio?: unknown }).scrollRatio === 'number'
+    && typeof (message as { scrollY?: unknown }).scrollY === 'number';
 }
 
 function resolveChapterLink(
