@@ -1,41 +1,79 @@
 import * as vscode from 'vscode';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { sanitizeXhtml } from './xhtml';
 import { readerShell, ReaderNavInfo } from './reader-shell';
 import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './epub';
 import { StateManager, ReaderPreferences } from './state-manager';
+import { EpubCacheManager, ArchiveSecurityError, ArchiveCorruptError } from './archive';
 
-const supportedExtensions = new Set(['.xhtml', '.html', '.htm']);
+const supportedExtensions = new Set(['.xhtml', '.html', '.htm', '.epub']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
 
 export function activate(context: vscode.ExtensionContext): void {
   const stateManager = new StateManager(context.workspaceState);
+  const cacheStorageDir = context.storageUri ? context.storageUri.fsPath : path.join(os.tmpdir(), 'xhtml-reader-previewer');
+  const cacheManager = new EpubCacheManager(cacheStorageDir);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('xhtmlReader.openPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Active, stateManager)),
-    vscode.commands.registerCommand('xhtmlReader.openSplitPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Beside, stateManager)),
+    vscode.commands.registerCommand('xhtmlReader.openPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Active, stateManager, cacheManager)),
+    vscode.commands.registerCommand('xhtmlReader.openSplitPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Beside, stateManager, cacheManager)),
   );
 }
 
 async function openPreview(
   uri: vscode.Uri | undefined,
   viewColumn = vscode.ViewColumn.Active,
-  stateManager?: StateManager
+  stateManager?: StateManager,
+  cacheManager?: EpubCacheManager
 ): Promise<void> {
   const source = uri ?? vscode.window.activeTextEditor?.document.uri;
 
   if (!source || !supportedExtensions.has(extensionOf(source))) {
-    void vscode.window.showWarningMessage('Open an XHTML, HTML, or HTM file first.');
+    void vscode.window.showWarningMessage('Open an XHTML, HTML, HTM, or EPUB file first.');
     return;
   }
 
-  const root = parentUri(source);
+  const ext = extensionOf(source);
+  let archiveCacheDir: string | undefined;
+
+  // Handle direct .epub archive extraction
+  if (ext === '.epub') {
+    if (!cacheManager) {
+      void vscode.window.showErrorMessage('EPUB Cache Manager is unavailable.');
+      return;
+    }
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Opening EPUB...',
+          cancellable: false
+        },
+        async (progress) => {
+          progress.report({ message: 'Validating and extracting EPUB package...' });
+          const bytes = await vscode.workspace.fs.readFile(source);
+          archiveCacheDir = cacheManager.extractEpubToCache(source.fsPath, Buffer.from(bytes));
+        }
+      );
+    } catch (error) {
+      const msg = error instanceof ArchiveSecurityError || error instanceof ArchiveCorruptError
+        ? error.message
+        : error instanceof Error ? error.message : String(error);
+      void vscode.window.showErrorMessage(`Failed to open EPUB archive: ${msg}`);
+      return;
+    }
+  }
+
+  const root = archiveCacheDir ? vscode.Uri.file(archiveCacheDir) : parentUri(source);
   let currentSource = source;
   let pendingFragment: string | undefined;
 
   // Attempt EPUB Package discovery & TOC loading
   let epubPackage: EpubPackage | undefined;
   try {
-    const containerRoot = await locateEpubContainer(source);
+    const containerRoot = archiveCacheDir ? vscode.Uri.file(archiveCacheDir) : await locateEpubContainer(source);
     if (containerRoot) {
       const containerUri = vscode.Uri.joinPath(containerRoot, 'META-INF', 'container.xml');
       const containerBytes = await vscode.workspace.fs.readFile(containerUri);
@@ -53,6 +91,11 @@ async function openPreview(
           const bytes = await vscode.workspace.fs.readFile(itemUri);
           return new TextDecoder('utf-8').decode(bytes);
         });
+
+        // If opened from .epub archive, default initial chapter to first spine chapter
+        if (ext === '.epub' && epubPackage.spine.length > 0) {
+          currentSource = epubPackage.spine[0].uri;
+        }
       }
     }
   } catch (error) {
@@ -197,6 +240,10 @@ async function openPreview(
     documentChange.dispose();
     messageSubscription.dispose();
     watcherChanges.forEach((subscription) => subscription.dispose());
+
+    if (archiveCacheDir && cacheManager) {
+      cacheManager.cleanupCache(archiveCacheDir);
+    }
   });
 
   void render();
