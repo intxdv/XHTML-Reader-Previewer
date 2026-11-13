@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.vsix
+.vscode-test/
+
+# AI-Native Workspace Orchestrator (Local / Ephemeral State)
+/tasks/
+/resource/notes/
+/resource/pr-notes/

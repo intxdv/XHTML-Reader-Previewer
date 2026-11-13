@@ -1,0 +1,56 @@
+{
+  "name": "xhtml-reader-previewer",
+  "displayName": "XHTML Reader Previewer",
+  "description": "Live XHTML and EPUB reader preview for VS Code-compatible IDEs.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:xhtmlReader.openPreview",
+    "onCommand:xhtmlReader.openSplitPreview"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "xhtmlReader.openPreview",
+        "title": "XHTML Reader: Open Preview"
+      },
+      {
+        "command": "xhtmlReader.openSplitPreview",
+        "title": "XHTML Reader: Open Split Preview"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "xhtmlReader.openPreview",
+          "when": "resourceExtname == .xhtml || resourceExtname == .html || resourceExtname == .htm",
+          "group": "navigation"
+        },
+        {
+          "command": "xhtmlReader.openSplitPreview",
+          "when": "resourceExtname == .xhtml || resourceExtname == .html || resourceExtname == .htm",
+          "group": "navigation@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js && esbuild src/xhtml.ts --bundle --platform=node --format=cjs --outfile=dist/xhtml.js",
+    "check": "tsc --noEmit",
+    "test": "npm run build && node --test test/xhtml.test.mjs",
+    "watch": "npm run build -- --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/vscode": "^1.95.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.2"
+  }
+}
