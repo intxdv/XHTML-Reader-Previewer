@@ -922,19 +922,22 @@ export function readerShell(
         scrollToFragment(initial);
         return;
       }
+      if (initialScrollY > 0) {
+        window.scrollTo({ top: initialScrollY, behavior: 'instant' });
+        return;
+      }
+      if (initialRatio > 0) {
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight > 0) {
+          window.scrollTo({ top: initialRatio * docHeight, behavior: 'instant' });
+          return;
+        }
+      }
       if (initialAnchorId) {
         const target = document.getElementById(initialAnchorId);
         if (target) {
           target.scrollIntoView({ behavior: 'instant', block: 'start' });
           return;
-        }
-      }
-      if (initialScrollY > 0) {
-        window.scrollTo({ top: initialScrollY, behavior: 'instant' });
-      } else if (initialRatio > 0) {
-        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-        if (docHeight > 0) {
-          window.scrollTo({ top: initialRatio * docHeight, behavior: 'instant' });
         }
       }
     }
