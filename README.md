@@ -2,7 +2,7 @@
   <img src="media/icon.png" width="128" height="128" alt="XHTML Reader Previewer Logo" />
 </p>
 
-# XHTML Reader Previewer
+<h1 align="center">XHTML Reader Previewer</h1>
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=selvagant.xhtml-reader-previewer"><img src="https://img.shields.io/visual-studio-marketplace/v/selvagant.xhtml-reader-previewer?style=flat-square&color=blue&label=VS%20Marketplace" alt="Marketplace Version"></a>
