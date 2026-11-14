@@ -167,8 +167,9 @@ export function readerShell(
       font-size: var(--reader-size);
       line-height: var(--reader-line-height);
       margin: 0;
-      padding: 5rem 1.5rem 4rem;
+      padding: 3.2rem 1.5rem 3.5rem;
       transition: background 0.2s ease, color 0.2s ease;
+      scroll-padding-top: 3.2rem;
     }
     main {
       max-width: var(--reader-max-width);
@@ -192,20 +193,45 @@ export function readerShell(
     }
     #toolbar {
       position: fixed;
-      z-index: 10;
+      z-index: 25;
       top: 0;
       left: 0;
       right: 0;
       display: flex;
-      flex-wrap: wrap;
-      gap: 0.45rem;
+      justify-content: space-between;
       align-items: center;
-      padding: 0.55rem 1rem;
+      padding: 0.35rem 0.85rem;
+      height: 2.35rem;
+      box-sizing: border-box;
       background: #111827e8;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
       border-bottom: 1px solid #374151;
       font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
-      transition: background 0.2s ease, border-color 0.2s ease;
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, border-color 0.2s ease;
+    }
+    #toolbar.hidden {
+      transform: translateY(-100%);
+      pointer-events: none;
+    }
+    .toolbar-left, .toolbar-right, .toolbar-center {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .toolbar-center {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .toolbar-hover-sensor {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 28px;
+      z-index: 24;
+      pointer-events: auto;
     }
     .toolbar-group {
       display: inline-flex;
@@ -442,18 +468,111 @@ export function readerShell(
       margin: 0.25rem 0;
     }
 
+    /* Settings Popover */
+    .settings-popover {
+      position: fixed;
+      top: 2.75rem;
+      right: 0.85rem;
+      z-index: 100;
+      width: min(20rem, calc(100vw - 2rem));
+      background: var(--popover-bg);
+      color: var(--popover-fg);
+      border: 1px solid var(--popover-border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      box-shadow: var(--popover-shadow);
+      font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+      font-size: 0.85rem;
+      animation: popoverFadeIn 0.12s ease-out;
+      box-sizing: border-box;
+    }
+    .settings-popover[hidden] {
+      display: none !important;
+    }
+    .settings-popover-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid rgba(156, 163, 175, 0.15);
+      font-weight: 600;
+    }
+    .settings-close-btn {
+      background: transparent;
+      border: none;
+      color: inherit;
+      font-size: 1rem;
+      cursor: pointer;
+      opacity: 0.7;
+      padding: 0.15rem 0.35rem;
+    }
+    .settings-close-btn:hover {
+      opacity: 1;
+    }
+    .settings-row {
+      margin-bottom: 0.7rem;
+    }
+    .settings-row:last-child {
+      margin-bottom: 0;
+    }
+    .settings-label {
+      display: block;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.65;
+      margin-bottom: 0.3rem;
+    }
+    .settings-pill-group {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.2rem;
+      border-radius: 0.35rem;
+    }
+    .pill-btn {
+      flex: 1;
+      padding: 0.25rem 0.45rem;
+      font-size: 0.8rem;
+      border: 1px solid transparent;
+      border-radius: 0.25rem;
+      background: transparent;
+      color: var(--reader-fg);
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+    }
+    .pill-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .pill-btn.active {
+      background: var(--reader-link);
+      color: #0f172a;
+      font-weight: 600;
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .settings-val-badge {
+      min-width: 2.8rem;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+
     /* Paginated Mode */
     body.paginated {
       height: 100vh;
       overflow: hidden;
-      padding-top: 4.2rem;
-      padding-bottom: 2.8rem;
+      padding-top: 3.2rem;
+      padding-bottom: 2.6rem;
       padding-left: 0;
       padding-right: 0;
       box-sizing: border-box;
     }
     body.paginated main {
-      height: calc(100vh - 7.5rem);
+      height: calc(100vh - 5.8rem);
       width: min(var(--reader-max-width), calc(100vw - 6rem));
       max-width: none;
       margin: 0 auto;
@@ -664,6 +783,16 @@ export function readerShell(
       background: #f8fafce8;
       border-top-color: #cbd5e1;
     }
+    .light .settings-pill-group {
+      background: #e2e8f0;
+    }
+    .light .pill-btn:hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
+    .light .pill-btn.active {
+      background: #1d4ed8;
+      color: #ffffff;
+    }
 
     /* Sepia Theme */
     .sepia {
@@ -710,32 +839,91 @@ export function readerShell(
       background: #fbf0d9e8;
       border-top-color: #d4bc91;
     }
+    .sepia .settings-pill-group {
+      background: #ebd8b5;
+    }
+    .sepia .pill-btn:hover {
+      background: rgba(95, 75, 50, 0.08);
+    }
+    .sepia .pill-btn.active {
+      background: #92400e;
+      color: #ffffff;
+    }
   </style>
 </head>
 <body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-start-at-bottom="${startAtBottom ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}">
-  <header id="toolbar" aria-label="Reader controls">
-    ${tocBtnHtml}
+  <div id="toolbar-hover-sensor" class="toolbar-hover-sensor" aria-hidden="true"></div>
 
-    <div class="toolbar-group">
-      <button type="button" data-action="smaller" aria-label="Decrease text size">A−</button>
-      <span id="font-size-display" class="font-size-badge" aria-label="Current text size">${prefs.fontSize}px</span>
-      <button type="button" data-action="larger" aria-label="Increase text size">A+</button>
+  <header id="toolbar" aria-label="Reader controls">
+    <div class="toolbar-left">
+      ${tocBtnHtml}
     </div>
 
-    <div class="toolbar-separator"></div>
+    <div class="toolbar-center">
+      ${navInfo?.chapterIndex ? `<span class="chapter-badge" title="${escapeHtml(navInfo.bookTitle || '')}">${navInfo.chapterIndex} / ${navInfo.totalChapters}</span>` : ''}
+    </div>
 
-    <button type="button" data-action="theme" id="theme-btn" aria-label="Change theme">${initialThemeLabel}</button>
-    <button type="button" data-action="font" id="font-btn" aria-label="Change font">${initialFontLabel}</button>
-    <button type="button" data-action="spacing" id="spacing-btn" aria-label="Change line height">${initialSpacingLabel}</button>
-    <button type="button" data-action="width" id="width-btn" aria-label="Change content width">${initialWidthLabel}</button>
-    <button type="button" data-action="mode" id="mode-btn" aria-label="Change reader mode">${initialModeLabel}</button>
-
-    ${navHtml}
+    <div class="toolbar-right">
+      <button type="button" data-action="mode" id="mode-btn" aria-label="Change reader mode">${initialModeLabel}</button>
+      <button type="button" data-action="toggle-settings" id="settings-btn" aria-label="Reader settings" title="Settings (Keyboard: S)">⚙</button>
+    </div>
 
     <div id="progress-track" aria-hidden="true">
       <div id="progress-bar"></div>
     </div>
   </header>
+
+  <div id="settings-popover" class="settings-popover" role="dialog" aria-modal="false" aria-label="Reading Settings" hidden>
+    <div class="settings-popover-header">
+      <span class="settings-popover-title">Reading Settings</span>
+      <button type="button" data-action="close-settings" class="settings-close-btn" aria-label="Close settings">✕</button>
+    </div>
+
+    <div class="settings-row">
+      <span class="settings-label">Text Size</span>
+      <div class="settings-pill-group">
+        <button type="button" data-action="smaller" aria-label="Decrease text size" class="pill-btn">A−</button>
+        <span id="font-size-display" class="settings-val-badge">${prefs.fontSize}px</span>
+        <button type="button" data-action="larger" aria-label="Increase text size" class="pill-btn">A+</button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <span class="settings-label">Theme</span>
+      <div class="settings-pill-group theme-pill-group">
+        <button type="button" data-action="theme-choice" data-theme="dark" id="theme-btn" class="pill-btn theme-choice-btn${prefs.theme === 'dark' ? ' active' : ''}">Dark</button>
+        <button type="button" data-action="theme-choice" data-theme="sepia" class="pill-btn theme-choice-btn${prefs.theme === 'sepia' ? ' active' : ''}">Sepia</button>
+        <button type="button" data-action="theme-choice" data-theme="light" class="pill-btn theme-choice-btn${prefs.theme === 'light' ? ' active' : ''}">Light</button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <span class="settings-label">Font</span>
+      <div class="settings-pill-group">
+        <button type="button" data-action="font-choice" data-font="serif" id="font-btn" class="pill-btn font-choice-btn${prefs.fontFamily === 'serif' ? ' active' : ''}">Serif</button>
+        <button type="button" data-action="font-choice" data-font="sans" class="pill-btn font-choice-btn${prefs.fontFamily === 'sans' ? ' active' : ''}">Sans</button>
+        <button type="button" data-action="font-choice" data-font="mono" class="pill-btn font-choice-btn${prefs.fontFamily === 'mono' ? ' active' : ''}">Mono</button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <span class="settings-label">Spacing</span>
+      <div class="settings-pill-group">
+        <button type="button" data-action="spacing-choice" data-spacing="tight" class="pill-btn spacing-choice-btn${prefs.lineHeight === 'tight' ? ' active' : ''}">Tight</button>
+        <button type="button" data-action="spacing-choice" data-spacing="normal" id="spacing-btn" class="pill-btn spacing-choice-btn${prefs.lineHeight === 'normal' ? ' active' : ''}">Normal</button>
+        <button type="button" data-action="spacing-choice" data-spacing="relaxed" class="pill-btn spacing-choice-btn${prefs.lineHeight === 'relaxed' ? ' active' : ''}">Relaxed</button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <span class="settings-label">Width</span>
+      <div class="settings-pill-group">
+        <button type="button" data-action="width-choice" data-width="compact" class="pill-btn width-choice-btn${prefs.readerWidth === 'compact' ? ' active' : ''}">Compact</button>
+        <button type="button" data-action="width-choice" data-width="normal" id="width-btn" class="pill-btn width-choice-btn${prefs.readerWidth === 'normal' ? ' active' : ''}">Normal</button>
+        <button type="button" data-action="width-choice" data-width="wide" class="pill-btn width-choice-btn${prefs.readerWidth === 'wide' ? ' active' : ''}">Wide</button>
+      </div>
+    </div>
+  </div>
 
   ${sidebarHtml}
 
@@ -793,6 +981,10 @@ export function readerShell(
     const contentEl = document.getElementById('content') || document.querySelector('main');
     const topCue = document.getElementById('top-overscroll-cue');
     const bottomCue = document.getElementById('bottom-overscroll-cue');
+    const toolbar = document.getElementById('toolbar');
+    const toolbarSensor = document.getElementById('toolbar-hover-sensor');
+    const settingsPopover = document.getElementById('settings-popover');
+    const settingsBtn = document.getElementById('settings-btn');
 
     let isPaginated = ${prefs.readerMode === 'paginated'};
     let currentPage = 1;
@@ -977,6 +1169,55 @@ export function readerShell(
     };
 
     const scrollToFragment = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    let isToolbarHidden = false;
+
+    function toggleToolbar(show) {
+      if (!toolbar) return;
+      if (show !== undefined) {
+        isToolbarHidden = !show;
+      } else {
+        isToolbarHidden = !isToolbarHidden;
+      }
+      if (isToolbarHidden) {
+        toolbar.classList.add('hidden');
+        if (settingsPopover) settingsPopover.hidden = true;
+      } else {
+        toolbar.classList.remove('hidden');
+      }
+    }
+
+    function toggleSettings(open) {
+      if (!settingsPopover) return;
+      const isOpen = open !== undefined ? open : settingsPopover.hidden;
+      if (isOpen) {
+        toggleToolbar(true);
+        settingsPopover.hidden = false;
+        updateSettingsPills();
+      } else {
+        settingsPopover.hidden = true;
+      }
+    }
+
+    function updateSettingsPills() {
+      const currentTheme = themes[themeIndex];
+      document.querySelectorAll('.theme-choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.theme === currentTheme);
+      });
+      const currentFont = fonts[fontIndex].id;
+      document.querySelectorAll('.font-choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.font === currentFont);
+      });
+      const currentSpacing = spacings[spacingIndex].id;
+      document.querySelectorAll('.spacing-choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.spacing === currentSpacing);
+      });
+      const currentWidth = widths[widthIndex].id;
+      document.querySelectorAll('.width-choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.width === currentWidth);
+      });
+      if (fontSizeDisplay) fontSizeDisplay.textContent = size + 'px';
+    }
 
     function hidePopover() {
       if (!popover.hidden) {
@@ -1418,6 +1659,9 @@ export function readerShell(
       if (action === 'toggle-toc') {
         toggleToc();
       }
+      if (action === 'toggle-settings') {
+        toggleSettings();
+      }
       if (action === 'smaller') {
         size = Math.max(12, size - 1);
         setSize();
@@ -1434,6 +1678,7 @@ export function readerShell(
           document.documentElement.classList.add(nextTheme);
         }
         themeBtn.textContent = 'Theme: ' + nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1);
+        updateSettingsPills();
         notifyPreferences();
       }
       if (action === 'font') {
@@ -1441,6 +1686,7 @@ export function readerShell(
         const font = fonts[fontIndex];
         document.documentElement.style.setProperty('--reader-font', font.css);
         fontBtn.textContent = font.label;
+        updateSettingsPills();
         if (isPaginated) {
           requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
         }
@@ -1451,6 +1697,7 @@ export function readerShell(
         const sp = spacings[spacingIndex];
         document.documentElement.style.setProperty('--reader-line-height', sp.val);
         spacingBtn.textContent = sp.label;
+        updateSettingsPills();
         if (isPaginated) {
           requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
         }
@@ -1461,6 +1708,7 @@ export function readerShell(
         const w = widths[widthIndex];
         document.documentElement.style.setProperty('--reader-max-width', w.val);
         widthBtn.textContent = w.label;
+        updateSettingsPills();
         if (isPaginated) {
           requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
         }
@@ -1475,6 +1723,142 @@ export function readerShell(
       if (action === 'next-chapter') {
         navigateToChapter({ type: 'nextChapter' });
       }
+    });
+
+    // Settings Popover actions
+    if (settingsPopover) {
+      settingsPopover.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+
+        if (action === 'close-settings') {
+          toggleSettings(false);
+          return;
+        }
+
+        if (action === 'smaller') {
+          size = Math.max(12, size - 1);
+          setSize();
+          return;
+        }
+
+        if (action === 'larger') {
+          size = Math.min(32, size + 1);
+          setSize();
+          return;
+        }
+
+        if (action === 'theme-choice') {
+          const targetTheme = button.dataset.theme;
+          const idx = themes.indexOf(targetTheme);
+          if (idx !== -1) {
+            themeIndex = idx;
+            document.documentElement.classList.remove('light', 'sepia');
+            if (targetTheme !== 'dark') {
+              document.documentElement.classList.add(targetTheme);
+            }
+            updateSettingsPills();
+            notifyPreferences();
+          }
+          return;
+        }
+
+        if (action === 'font-choice') {
+          const targetFont = button.dataset.font;
+          const idx = fonts.findIndex(f => f.id === targetFont);
+          if (idx !== -1) {
+            fontIndex = idx;
+            const font = fonts[fontIndex];
+            document.documentElement.style.setProperty('--reader-font', font.css);
+            updateSettingsPills();
+            if (isPaginated) {
+              requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
+            }
+            notifyPreferences();
+          }
+          return;
+        }
+
+        if (action === 'spacing-choice') {
+          const targetSpacing = button.dataset.spacing;
+          const idx = spacings.findIndex(s => s.id === targetSpacing);
+          if (idx !== -1) {
+            spacingIndex = idx;
+            const sp = spacings[spacingIndex];
+            document.documentElement.style.setProperty('--reader-line-height', sp.val);
+            updateSettingsPills();
+            if (isPaginated) {
+              requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
+            }
+            notifyPreferences();
+          }
+          return;
+        }
+
+        if (action === 'width-choice') {
+          const targetWidth = button.dataset.width;
+          const idx = widths.findIndex(w => w.id === targetWidth);
+          if (idx !== -1) {
+            widthIndex = idx;
+            const w = widths[widthIndex];
+            document.documentElement.style.setProperty('--reader-max-width', w.val);
+            updateSettingsPills();
+            if (isPaginated) {
+              requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
+            }
+            notifyPreferences();
+          }
+          return;
+        }
+      });
+    }
+
+    // Close Settings Popover on outside click
+    document.addEventListener('click', (event) => {
+      if (settingsPopover && !settingsPopover.hidden) {
+        if (!settingsPopover.contains(event.target) && !event.target.closest('#settings-btn')) {
+          toggleSettings(false);
+        }
+      }
+    });
+
+    // Hover sensor at top edge
+    if (toolbarSensor) {
+      toolbarSensor.addEventListener('mouseenter', () => {
+        if (toolbar) toolbar.classList.remove('hidden');
+      });
+    }
+
+    if (toolbar) {
+      toolbar.addEventListener('mouseleave', () => {
+        if (isToolbarHidden && settingsPopover && settingsPopover.hidden) {
+          toolbar.classList.add('hidden');
+        }
+      });
+    }
+
+    // Middle-click (mouse wheel click) to toggle toolbar
+    document.addEventListener('auxclick', (event) => {
+      if (event.button === 1) {
+        event.preventDefault();
+        toggleToolbar();
+      }
+    });
+
+    // Reading area click to toggle toolbar
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('#toolbar, #settings-popover, #toc-sidebar, #toc-backdrop, .footnote-popover, .page-nav-arrow, .overscroll-cue')) {
+        return;
+      }
+      if (event.target.closest('a, button, input, textarea, select, [role="button"]')) {
+        return;
+      }
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        return;
+      }
+      toggleToolbar();
     });
 
     // Close TOC button and backdrop click
@@ -1542,11 +1926,25 @@ export function readerShell(
     // Keyboard shortcuts
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
+        if (settingsPopover && !settingsPopover.hidden) {
+          toggleSettings(false);
+          return;
+        }
         if (tocSidebar && tocSidebar.classList.contains('open')) {
           toggleToc(false);
           return;
         }
         hidePopover();
+      }
+      if (event.key === 'h' || event.key === 'H') {
+        if (document.activeElement !== tocSearch) {
+          toggleToolbar();
+        }
+      }
+      if (event.key === 's' || event.key === 'S') {
+        if (document.activeElement !== tocSearch) {
+          toggleSettings();
+        }
       }
       if (event.key === 't' || event.key === 'T') {
         // Only toggle if not typing in search box

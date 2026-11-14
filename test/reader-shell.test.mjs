@@ -110,3 +110,29 @@ test('readerShell contains Moon+ Reader style continuous overscroll cues and cha
   assert.match(extensionBundle, /data-start-at-bottom/);
   assert.match(extensionBundle, /startAtBottom:\s*true/);
 });
+
+test('readerShell contains ultra-compact single-row toolbar with settings popover and immersive auto-hide mode', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify compact toolbar structure
+  assert.match(extensionBundle, /id=["']toolbar["']/);
+  assert.match(extensionBundle, /id=["']toolbar-hover-sensor["']/);
+  assert.match(extensionBundle, /id=["']settings-btn["']/);
+  assert.match(extensionBundle, /id=["']settings-popover["']/);
+
+  // Verify settings popover content and pills
+  assert.match(extensionBundle, /Reading Settings/);
+  assert.match(extensionBundle, /theme-choice/);
+  assert.match(extensionBundle, /font-choice/);
+  assert.match(extensionBundle, /spacing-choice/);
+  assert.match(extensionBundle, /width-choice/);
+  assert.match(extensionBundle, /id=["']font-size-display["']/);
+
+  // Verify immersive auto-hide and toggle mechanics
+  assert.match(extensionBundle, /toggleToolbar/);
+  assert.match(extensionBundle, /toggleSettings/);
+  assert.match(extensionBundle, /updateSettingsPills/);
+  assert.match(extensionBundle, /toolbar-hover-sensor/);
+  assert.match(extensionBundle, /auxclick/); // Middle-click
+});
