@@ -54,6 +54,15 @@ const widthLabelMap: Record<string, string> = {
   compact: 'Width: Compact'
 };
 
+const ICONS = {
+  book: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`,
+  openBook: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>`,
+  scroll: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`,
+  settings: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>`,
+  chevronLeft: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>`,
+  chevronRight: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>`
+};
+
 export function readerShell(
   content: string,
   source: vscode.Uri,
@@ -93,7 +102,7 @@ export function readerShell(
   const hasToc = navInfo && Array.isArray(navInfo.toc) && navInfo.toc.length > 0;
 
   const tocBtnHtml = hasToc
-    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)"><span class="btn-icon">📖</span> <span>Contents</span></button>`
+    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)">${ICONS.book} <span>Contents</span></button>`
     : '';
 
   const navHtml = hasNav
@@ -943,16 +952,16 @@ export function readerShell(
     <div class="toolbar-center">
       ${navInfo?.chapterIndex ? `
         <div class="chapter-nav-inline">
-          <button type="button" data-action="prev-chapter" id="prev-btn" class="nav-arrow-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo?.hasPrev ? '' : 'disabled'} aria-label="Previous chapter">‹</button>
+          <button type="button" data-action="prev-chapter" id="prev-btn" class="nav-arrow-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo?.hasPrev ? '' : 'disabled'} aria-label="Previous chapter">${ICONS.chevronLeft}</button>
           <span class="chapter-badge" title="${escapeHtml(navInfo?.bookTitle || '')}">${navInfo.chapterIndex} / ${navInfo.totalChapters}</span>
-          <button type="button" data-action="next-chapter" id="next-btn" class="nav-arrow-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo?.hasNext ? '' : 'disabled'} aria-label="Next chapter">›</button>
+          <button type="button" data-action="next-chapter" id="next-btn" class="nav-arrow-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo?.hasNext ? '' : 'disabled'} aria-label="Next chapter">${ICONS.chevronRight}</button>
         </div>
       ` : ''}
     </div>
 
     <div class="toolbar-right">
-      <button type="button" data-action="mode" id="mode-btn" class="icon-btn" aria-label="Reading Mode" title="Reading Mode: ${prefs.readerMode === 'paginated' ? 'Paginated (Click to switch to Continuous Scroll)' : 'Continuous Scroll (Click to switch to Paginated)'}">${prefs.readerMode === 'paginated' ? '📖' : '📜'}</button>
-      <button type="button" data-action="toggle-settings" id="settings-btn" class="icon-btn" aria-label="Reader settings" title="Settings (Keyboard: S)">⚙</button>
+      <button type="button" data-action="mode" id="mode-btn" class="icon-btn" aria-label="Reading Mode" title="Reading Mode: ${prefs.readerMode === 'paginated' ? 'Paginated (Click to switch to Continuous Scroll)' : 'Continuous Scroll (Click to switch to Paginated)'}">${prefs.readerMode === 'paginated' ? ICONS.openBook : ICONS.scroll}</button>
+      <button type="button" data-action="toggle-settings" id="settings-btn" class="icon-btn" aria-label="Reader settings" title="Settings (Keyboard: S)">${ICONS.settings}</button>
     </div>
 
     <div id="progress-track" aria-hidden="true">
@@ -969,8 +978,8 @@ export function readerShell(
     <div class="settings-row">
       <span class="settings-label">Reading Mode</span>
       <div class="settings-pill-group mode-pill-group">
-        <button type="button" data-action="mode-choice" data-mode="scroll" class="pill-btn mode-choice-btn${prefs.readerMode !== 'paginated' ? ' active' : ''}" title="Scroll seperti halaman web">📜 Scroll</button>
-        <button type="button" data-action="mode-choice" data-mode="paginated" class="pill-btn mode-choice-btn${prefs.readerMode === 'paginated' ? ' active' : ''}" title="Halaman seperti ebook reader">📖 Paginated</button>
+        <button type="button" data-action="mode-choice" data-mode="scroll" class="pill-btn mode-choice-btn${prefs.readerMode !== 'paginated' ? ' active' : ''}" title="Scroll like a web page">Scroll</button>
+        <button type="button" data-action="mode-choice" data-mode="paginated" class="pill-btn mode-choice-btn${prefs.readerMode === 'paginated' ? ' active' : ''}" title="Pages like an ebook reader">Paginated</button>
       </div>
     </div>
 
@@ -1176,7 +1185,7 @@ export function readerShell(
         isPaginated = true;
         document.body.classList.add('paginated');
         if (modeBtn) {
-          modeBtn.textContent = '📖';
+          modeBtn.innerHTML = '${ICONS.openBook}';
           modeBtn.title = 'Reading Mode: Paginated (Click to switch to Continuous Scroll)';
         }
         updateSettingsPills();
@@ -1194,7 +1203,7 @@ export function readerShell(
         isPaginated = false;
         document.body.classList.remove('paginated');
         if (modeBtn) {
-          modeBtn.textContent = '📜';
+          modeBtn.innerHTML = '${ICONS.scroll}';
           modeBtn.title = 'Reading Mode: Continuous Scroll (Click to switch to Paginated)';
         }
         updateSettingsPills();
