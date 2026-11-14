@@ -264,8 +264,8 @@ async function attachReaderToWebview(
         if (currentIndex > 0) {
           currentSource = epubPackage.spine[currentIndex - 1].uri;
           pendingFragment = undefined;
-          const startAtBottom = (message as { startAtBottom?: boolean }).startAtBottom ?? true;
-          void render(false, startAtBottom);
+          const startAtBottom = Boolean((message as { startAtBottom?: boolean }).startAtBottom);
+          void render(!startAtBottom, startAtBottom);
         }
       }
       return;

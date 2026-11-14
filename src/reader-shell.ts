@@ -1852,7 +1852,7 @@ export function readerShell(
         toggleMode();
       }
       if (action === 'prev-chapter') {
-        navigateToChapter({ type: 'prevChapter', startAtBottom: true });
+        navigateToChapter({ type: 'prevChapter' });
       }
       if (action === 'next-chapter') {
         navigateToChapter({ type: 'nextChapter' });
@@ -2105,7 +2105,7 @@ export function readerShell(
         }
       }
       if (event.key === '[' || (event.altKey && event.key === 'ArrowLeft')) {
-        navigateToChapter({ type: 'prevChapter', startAtBottom: true });
+        navigateToChapter({ type: 'prevChapter' });
       }
       if (event.key === ']' || (event.altKey && event.key === 'ArrowRight')) {
         navigateToChapter({ type: 'nextChapter' });
