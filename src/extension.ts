@@ -18,7 +18,59 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('xhtmlReader.openPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Active, stateManager, cacheManager)),
     vscode.commands.registerCommand('xhtmlReader.openSplitPreview', (uri?: vscode.Uri) => openPreview(uri, vscode.ViewColumn.Beside, stateManager, cacheManager)),
+    vscode.window.registerCustomEditorProvider(
+      EpubCustomEditorProvider.viewType,
+      new EpubCustomEditorProvider(stateManager, cacheManager),
+      {
+        webviewOptions: { retainContextWhenHidden: true },
+        supportsMultipleEditorsPerDocument: false
+      }
+    ),
+    vscode.window.registerCustomEditorProvider(
+      XhtmlCustomTextEditorProvider.viewType,
+      new XhtmlCustomTextEditorProvider(stateManager, cacheManager),
+      {
+        webviewOptions: { retainContextWhenHidden: true },
+        supportsMultipleEditorsPerDocument: true
+      }
+    )
   );
+}
+
+export class EpubCustomEditorProvider implements vscode.CustomReadonlyEditorProvider {
+  public static readonly viewType = 'xhtmlReader.epubEditor';
+
+  constructor(
+    private readonly stateManager: StateManager,
+    private readonly cacheManager: EpubCacheManager
+  ) {}
+
+  openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
+    return { uri, dispose: () => {} };
+  }
+
+  async resolveCustomEditor(
+    document: vscode.CustomDocument,
+    webviewPanel: vscode.WebviewPanel
+  ): Promise<void> {
+    await attachReaderToWebview(webviewPanel, document.uri, this.stateManager, this.cacheManager);
+  }
+}
+
+export class XhtmlCustomTextEditorProvider implements vscode.CustomTextEditorProvider {
+  public static readonly viewType = 'xhtmlReader.customEditor';
+
+  constructor(
+    private readonly stateManager: StateManager,
+    private readonly cacheManager: EpubCacheManager
+  ) {}
+
+  async resolveCustomTextEditor(
+    document: vscode.TextDocument,
+    webviewPanel: vscode.WebviewPanel
+  ): Promise<void> {
+    await attachReaderToWebview(webviewPanel, document.uri, this.stateManager, this.cacheManager, document);
+  }
 }
 
 async function openPreview(
@@ -47,6 +99,27 @@ async function openPreview(
       return;
     }
   }
+
+  const fileName = source.path.slice(source.path.lastIndexOf('/') + 1);
+  const panel = vscode.window.createWebviewPanel(
+    'xhtmlReaderPreview',
+    `Reader: ${fileName}`,
+    viewColumn,
+    { enableScripts: true }
+  );
+
+  if (stateManager && cacheManager) {
+    await attachReaderToWebview(panel, source, stateManager, cacheManager);
+  }
+}
+
+async function attachReaderToWebview(
+  panel: vscode.WebviewPanel,
+  source: vscode.Uri,
+  stateManager: StateManager,
+  cacheManager: EpubCacheManager,
+  document?: vscode.TextDocument
+): Promise<void> {
 
   const ext = extensionOf(source);
   let archiveCacheDir: string | undefined;
@@ -120,12 +193,7 @@ async function openPreview(
     ? [epubPackage.containerRoot, epubPackage.opfDir, root]
     : [root];
 
-  const panel = vscode.window.createWebviewPanel(
-    'xhtmlReaderPreview',
-    getPanelTitle(currentSource, epubPackage),
-    viewColumn,
-    { enableScripts: true, localResourceRoots },
-  );
+  panel.webview.options = { enableScripts: true, localResourceRoots };
 
   let timer: NodeJS.Timeout | undefined;
 
