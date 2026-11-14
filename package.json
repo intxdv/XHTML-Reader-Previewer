@@ -3,6 +3,7 @@
   "displayName": "XHTML Reader Previewer",
   "description": "Live XHTML and EPUB reader preview for VS Code-compatible IDEs.",
   "version": "0.0.1",
+  "icon": "media/icon.png",
   "publisher": "local",
   "engines": {
     "vscode": "^1.95.0"

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="media/icon.png" width="128" height="128" alt="XHTML Reader Previewer Logo" />
+</p>
+
 # XHTML Reader Previewer
 
 Starter workspace for a VS Code-compatible XHTML and EPUB reader extension.

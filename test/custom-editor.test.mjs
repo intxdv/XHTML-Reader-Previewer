@@ -27,6 +27,10 @@ test('package.json contributes customEditors with default priority for .epub and
   // Activation events
   assert.ok(pkg.activationEvents.includes('onCustomEditor:xhtmlReader.epubEditor'));
   assert.ok(pkg.activationEvents.includes('onCustomEditor:xhtmlReader.customEditor'));
+
+  // Official extension icon
+  assert.equal(pkg.icon, 'media/icon.png');
+  assert.ok(fs.existsSync('media/icon.png'));
 });
 
 test('extension bundle implements and registers CustomEditor providers', () => {
@@ -41,6 +45,7 @@ test('extension bundle implements and registers CustomEditor providers', () => {
   assert.match(extensionBundle, /xhtmlReader\.epubEditor/);
   assert.match(extensionBundle, /xhtmlReader\.customEditor/);
 
-  // Verify attachReaderToWebview logic
+  // Verify attachReaderToWebview logic and panel.iconPath
   assert.match(extensionBundle, /attachReaderToWebview/);
+  assert.match(extensionBundle, /iconPath/);
 });

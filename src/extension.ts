@@ -9,8 +9,10 @@ import { EpubCacheManager, ArchiveSecurityError, ArchiveCorruptError } from './a
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm', '.epub']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
+let extensionUri: vscode.Uri | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  extensionUri = context.extensionUri;
   const stateManager = new StateManager(context.workspaceState);
   const cacheStorageDir = context.storageUri ? context.storageUri.fsPath : path.join(os.tmpdir(), 'xhtml-reader-previewer');
   const cacheManager = new EpubCacheManager(cacheStorageDir);
@@ -120,6 +122,9 @@ async function attachReaderToWebview(
   cacheManager: EpubCacheManager,
   document?: vscode.TextDocument
 ): Promise<void> {
+  if (extensionUri) {
+    panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'icon.png');
+  }
 
   const ext = extensionOf(source);
   let archiveCacheDir: string | undefined;
