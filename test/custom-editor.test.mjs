@@ -24,9 +24,8 @@ test('package.json contributes customEditors with default priority for .epub and
     { filenamePattern: '*.htm' }
   ]);
 
-  // Activation events
-  assert.ok(pkg.activationEvents.includes('onCustomEditor:xhtmlReader.epubEditor'));
-  assert.ok(pkg.activationEvents.includes('onCustomEditor:xhtmlReader.customEditor'));
+  // Activation events: omitted in modern VS Code since contributes.customEditors infers them automatically
+  assert.equal(pkg.activationEvents, undefined);
 
   // Official extension icon
   assert.equal(pkg.icon, 'media/icon.png');

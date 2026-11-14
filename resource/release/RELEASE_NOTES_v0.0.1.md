@@ -43,7 +43,7 @@ We are thrilled to announce the initial release of **XHTML Reader Previewer** (`
 
 | Asset | Size | SHA-256 Checksum |
 | :--- | :--- | :--- |
-| **`xhtml-reader-previewer-0.0.1.vsix`** | ~89.4 KB | `9E74D91FE677428892AA782CB68866830023ED61FF22FC73332A459C1E6A234A` |
+| **`xhtml-reader-previewer-0.0.1.vsix`** | ~89.4 KB | `FD79315AB53BCBD835D0268E52D524DE7B9DD64C11477431525BDABD84CF7098` |
 
 ---
 

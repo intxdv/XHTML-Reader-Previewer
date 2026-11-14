@@ -35,12 +35,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:xhtmlReader.openPreview",
-    "onCommand:xhtmlReader.openSplitPreview",
-    "onCustomEditor:xhtmlReader.epubEditor",
-    "onCustomEditor:xhtmlReader.customEditor"
-  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
