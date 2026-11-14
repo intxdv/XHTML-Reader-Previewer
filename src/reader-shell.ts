@@ -93,7 +93,7 @@ export function readerShell(
   const hasToc = navInfo && Array.isArray(navInfo.toc) && navInfo.toc.length > 0;
 
   const tocBtnHtml = hasToc
-    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)">☰ Contents</button>`
+    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)"><span class="btn-icon">📖</span> <span>Contents</span></button>`
     : '';
 
   const navHtml = hasNav
@@ -200,12 +200,11 @@ export function readerShell(
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.35rem 0.85rem;
-      height: 2.35rem;
+      padding: 0.45rem 1rem;
+      height: 2.45rem;
       box-sizing: border-box;
-      background: #111827e8;
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid #374151;
+      background: var(--reader-bg);
+      border-bottom: 1px solid rgba(156, 163, 175, 0.12);
       font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
       transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, border-color 0.2s ease;
     }
@@ -222,7 +221,12 @@ export function readerShell(
       position: absolute;
       left: 50%;
       transform: translateX(-50%);
-      pointer-events: none;
+      pointer-events: auto;
+    }
+    .chapter-nav-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
     }
     .toolbar-hover-sensor {
       position: fixed;
@@ -264,7 +268,62 @@ export function readerShell(
       cursor: not-allowed;
       border-color: transparent;
     }
-    .font-size-badge, .chapter-badge {
+    #toolbar button {
+      color: inherit;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 0.35rem;
+      padding: 0.25rem 0.55rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-family: inherit;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      transition: background 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+      user-select: none;
+    }
+    #toolbar button:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: transparent;
+    }
+    #toolbar button:active:not(:disabled) {
+      background: rgba(255, 255, 255, 0.14);
+      transform: scale(0.96);
+    }
+    #toolbar button:disabled {
+      opacity: 0.22;
+      cursor: default;
+    }
+    .nav-arrow-btn {
+      width: 1.7rem !important;
+      height: 1.7rem !important;
+      padding: 0 !important;
+      font-size: 1.15rem !important;
+      line-height: 1 !important;
+      border-radius: 50% !important;
+    }
+    .icon-btn {
+      font-size: 1.05rem !important;
+      width: 2rem;
+      height: 2rem;
+      padding: 0 !important;
+      border-radius: 0.35rem;
+    }
+    .chapter-badge {
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.2rem 0.45rem;
+      border-radius: 0.25rem;
+      background: transparent;
+      color: var(--reader-fg);
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+      opacity: 0.85;
+    }
+    .font-size-badge {
       font-size: 0.82rem;
       font-weight: 500;
       padding: 0.2rem 0.45rem;
@@ -753,8 +812,19 @@ export function readerShell(
       --toc-item-active-fg: #1d4ed8;
     }
     .light #toolbar {
-      background: #f8fafce8;
-      border-color: #cbd5e1;
+      background: var(--reader-bg);
+      border-bottom-color: rgba(0, 0, 0, 0.08);
+    }
+    .light #toolbar button {
+      background: transparent;
+      border-color: transparent;
+      color: var(--reader-fg);
+    }
+    .light #toolbar button:hover:not(:disabled) {
+      background: rgba(0, 0, 0, 0.06);
+    }
+    .light #toolbar button:active:not(:disabled) {
+      background: rgba(0, 0, 0, 0.12);
     }
     .light button {
       background: #e2e8f0;
@@ -809,8 +879,19 @@ export function readerShell(
       --toc-item-active-fg: #92400e;
     }
     .sepia #toolbar {
-      background: #fbf0d9e8;
-      border-color: #d4bc91;
+      background: var(--reader-bg);
+      border-bottom-color: rgba(95, 75, 50, 0.12);
+    }
+    .sepia #toolbar button {
+      background: transparent;
+      border-color: transparent;
+      color: var(--reader-fg);
+    }
+    .sepia #toolbar button:hover:not(:disabled) {
+      background: rgba(95, 75, 50, 0.08);
+    }
+    .sepia #toolbar button:active:not(:disabled) {
+      background: rgba(95, 75, 50, 0.16);
     }
     .sepia button {
       background: #ebd8b5;
@@ -860,12 +941,18 @@ export function readerShell(
     </div>
 
     <div class="toolbar-center">
-      ${navInfo?.chapterIndex ? `<span class="chapter-badge" title="${escapeHtml(navInfo.bookTitle || '')}">${navInfo.chapterIndex} / ${navInfo.totalChapters}</span>` : ''}
+      ${navInfo?.chapterIndex ? `
+        <div class="chapter-nav-inline">
+          <button type="button" data-action="prev-chapter" id="prev-btn" class="nav-arrow-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo?.hasPrev ? '' : 'disabled'} aria-label="Previous chapter">‹</button>
+          <span class="chapter-badge" title="${escapeHtml(navInfo?.bookTitle || '')}">${navInfo.chapterIndex} / ${navInfo.totalChapters}</span>
+          <button type="button" data-action="next-chapter" id="next-btn" class="nav-arrow-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo?.hasNext ? '' : 'disabled'} aria-label="Next chapter">›</button>
+        </div>
+      ` : ''}
     </div>
 
     <div class="toolbar-right">
-      <button type="button" data-action="mode" id="mode-btn" aria-label="Change reader mode">${initialModeLabel}</button>
-      <button type="button" data-action="toggle-settings" id="settings-btn" aria-label="Reader settings" title="Settings (Keyboard: S)">⚙</button>
+      <button type="button" data-action="mode" id="mode-btn" class="icon-btn" aria-label="Reading Mode" title="Reading Mode: ${prefs.readerMode === 'paginated' ? 'Paginated (Click to switch to Continuous Scroll)' : 'Continuous Scroll (Click to switch to Paginated)'}">${prefs.readerMode === 'paginated' ? '📖' : '📜'}</button>
+      <button type="button" data-action="toggle-settings" id="settings-btn" class="icon-btn" aria-label="Reader settings" title="Settings (Keyboard: S)">⚙</button>
     </div>
 
     <div id="progress-track" aria-hidden="true">
@@ -877,6 +964,14 @@ export function readerShell(
     <div class="settings-popover-header">
       <span class="settings-popover-title">Reading Settings</span>
       <button type="button" data-action="close-settings" class="settings-close-btn" aria-label="Close settings">✕</button>
+    </div>
+
+    <div class="settings-row">
+      <span class="settings-label">Reading Mode</span>
+      <div class="settings-pill-group mode-pill-group">
+        <button type="button" data-action="mode-choice" data-mode="scroll" class="pill-btn mode-choice-btn${prefs.readerMode !== 'paginated' ? ' active' : ''}" title="Scroll seperti halaman web">📜 Scroll</button>
+        <button type="button" data-action="mode-choice" data-mode="paginated" class="pill-btn mode-choice-btn${prefs.readerMode === 'paginated' ? ' active' : ''}" title="Halaman seperti ebook reader">📖 Paginated</button>
+      </div>
     </div>
 
     <div class="settings-row">
@@ -1080,7 +1175,11 @@ export function readerShell(
 
         isPaginated = true;
         document.body.classList.add('paginated');
-        if (modeBtn) modeBtn.textContent = 'Mode: Paginated';
+        if (modeBtn) {
+          modeBtn.textContent = '📖';
+          modeBtn.title = 'Reading Mode: Paginated (Click to switch to Continuous Scroll)';
+        }
+        updateSettingsPills();
 
         window.scrollTo(0, 0);
         requestAnimationFrame(() => {
@@ -1094,7 +1193,11 @@ export function readerShell(
 
         isPaginated = false;
         document.body.classList.remove('paginated');
-        if (modeBtn) modeBtn.textContent = 'Mode: Scroll';
+        if (modeBtn) {
+          modeBtn.textContent = '📜';
+          modeBtn.title = 'Reading Mode: Continuous Scroll (Click to switch to Paginated)';
+        }
+        updateSettingsPills();
         if (contentEl) contentEl.scrollLeft = 0;
 
         requestAnimationFrame(() => {
@@ -1200,6 +1303,9 @@ export function readerShell(
     }
 
     function updateSettingsPills() {
+      document.querySelectorAll('.mode-choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.mode === (isPaginated ? 'paginated' : 'scroll'));
+      });
       const currentTheme = themes[themeIndex];
       document.querySelectorAll('.theme-choice-btn').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.theme === currentTheme);
@@ -1734,6 +1840,12 @@ export function readerShell(
 
         if (action === 'close-settings') {
           toggleSettings(false);
+          return;
+        }
+
+        if (action === 'mode-choice') {
+          const targetMode = button.dataset.mode;
+          toggleMode(targetMode);
           return;
         }
 

@@ -115,14 +115,18 @@ test('readerShell contains ultra-compact single-row toolbar with settings popove
   const fs = await import('node:fs');
   const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
 
-  // Verify compact toolbar structure
+  // Verify compact toolbar structure with inline chapter navigation
   assert.match(extensionBundle, /id=["']toolbar["']/);
   assert.match(extensionBundle, /id=["']toolbar-hover-sensor["']/);
   assert.match(extensionBundle, /id=["']settings-btn["']/);
   assert.match(extensionBundle, /id=["']settings-popover["']/);
+  assert.match(extensionBundle, /chapter-nav-inline/);
+  assert.match(extensionBundle, /id=["']prev-btn["']/);
+  assert.match(extensionBundle, /id=["']next-btn["']/);
 
   // Verify settings popover content and pills
   assert.match(extensionBundle, /Reading Settings/);
+  assert.match(extensionBundle, /mode-choice/);
   assert.match(extensionBundle, /theme-choice/);
   assert.match(extensionBundle, /font-choice/);
   assert.match(extensionBundle, /spacing-choice/);

@@ -230,7 +230,7 @@ async function attachReaderToWebview(
         toc: tocWithActive
       };
 
-      panel.title = getPanelTitle(currentSource, epubPackage, spineIndex);
+      panel.title = getPanelTitle(currentSource, epubPackage);
       const preferences = stateManager?.getPreferences();
       const location = (resetToTop || startAtBottom) ? undefined : stateManager?.getReadingLocation(currentSource.toString());
       panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location, resetToTop, startAtBottom);
@@ -332,13 +332,10 @@ async function attachReaderToWebview(
   void render();
 }
 
-function getPanelTitle(source: vscode.Uri, epub?: EpubPackage, spineIndex = -1): string {
+function getPanelTitle(source: vscode.Uri, epub?: EpubPackage): string {
   const fileName = source.path.slice(source.path.lastIndexOf('/') + 1);
   if (!epub) {
     return `Reader: ${fileName}`;
-  }
-  if (spineIndex >= 0) {
-    return `${epub.title} [${spineIndex + 1}/${epub.spine.length}] — ${fileName}`;
   }
   return `${epub.title} — ${fileName}`;
 }
