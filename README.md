@@ -1,16 +1,14 @@
-<p align="center">
+<div align="center">
   <img src="media/icon.png" width="128" height="128" alt="XHTML Reader Previewer Logo" />
-</p>
-
-<h1 align="center">XHTML Reader Previewer</h1>
-
-<p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=selvagant.xhtml-reader-previewer"><img src="https://img.shields.io/visual-studio-marketplace/v/selvagant.xhtml-reader-previewer?style=flat-square&color=blue&label=VS%20Marketplace" alt="Marketplace Version"></a>
-  <a href="https://github.com/intxdv/XHTML-Reader-Previewer/releases/latest"><img src="https://img.shields.io/github/v/release/intxdv/XHTML-Reader-Previewer?style=flat-square&color=emerald&label=GitHub%20Release" alt="GitHub Release"></a>
-  <a href="https://github.com/intxdv/XHTML-Reader-Previewer/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/intxdv/XHTML-Reader-Previewer/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/vscode-^1.95.0-purple.svg?style=flat-square" alt="VS Code Compatibility">
-</p>
+  <h1>XHTML Reader Previewer</h1>
+  <p>
+    <a href="https://marketplace.visualstudio.com/items?itemName=selvagant.xhtml-reader-previewer"><img src="https://vsmarketplacebadges.dev/version/selvagant.xhtml-reader-previewer.svg?style=flat-square" alt="Marketplace Version"></a>
+    <a href="https://github.com/intxdv/XHTML-Reader-Previewer/releases/latest"><img src="https://img.shields.io/github/v/release/intxdv/XHTML-Reader-Previewer?style=flat-square&color=emerald&label=GitHub%20Release" alt="GitHub Release"></a>
+    <a href="https://github.com/intxdv/XHTML-Reader-Previewer/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/intxdv/XHTML-Reader-Previewer/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License: MIT"></a>
+    <img src="https://img.shields.io/badge/vscode-^1.95.0-purple.svg?style=flat-square" alt="VS Code Compatibility">
+  </p>
+</div>
 
 A modern, immersive, and feature-rich XHTML, HTML, and EPUB reader and live previewer extension for VS Code and compatible IDEs (Antigravity, Cursor, VSCodium).
 
