@@ -1,0 +1,10 @@
+.vscode/**
+.vscode-test/**
+src/**
+test/**
+tasks/**
+resource/**
+.agents/**
+WORKSPACE.md
+tsconfig.json
+*.vsix

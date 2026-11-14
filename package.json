@@ -4,7 +4,21 @@
   "description": "Live XHTML and EPUB reader preview for VS Code-compatible IDEs.",
   "version": "0.0.1",
   "icon": "media/icon.png",
-  "publisher": "local",
+  "publisher": "intxdv",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/intxdv/XHTML-Reader-Previewer.git"
+  },
+  "keywords": [
+    "xhtml",
+    "epub",
+    "ebook",
+    "reader",
+    "preview",
+    "viewer",
+    "book"
+  ],
   "engines": {
     "vscode": "^1.95.0"
   },
