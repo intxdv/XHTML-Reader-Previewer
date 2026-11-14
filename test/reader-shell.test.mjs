@@ -83,3 +83,25 @@ test('readerShell contains multi-column paginated mode controls, layout, and key
   assert.match(extensionBundle, /ArrowRight/);
   assert.match(extensionBundle, /ArrowLeft/);
 });
+
+test('readerShell contains Moon+ Reader style continuous overscroll cues and chapter transition logic', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify overscroll cues in DOM
+  assert.match(extensionBundle, /id=["']top-overscroll-cue["']/);
+  assert.match(extensionBundle, /id=["']bottom-overscroll-cue["']/);
+  assert.match(extensionBundle, /\.overscroll-cue/);
+
+  // Verify resistance and threshold mechanics
+  assert.match(extensionBundle, /PULL_THRESHOLD/);
+  assert.match(extensionBundle, /resetOverscrollCues/);
+  assert.match(extensionBundle, /isTransitioningChapter/);
+  assert.match(extensionBundle, /isAtBottom/);
+  assert.match(extensionBundle, /isAtTop/);
+
+  // Verify wheel and touch event handling
+  assert.match(extensionBundle, /addEventListener\(["']wheel["']/);
+  assert.match(extensionBundle, /addEventListener\(["']touchstart["']/);
+  assert.match(extensionBundle, /addEventListener\(["']touchmove["']/);
+});

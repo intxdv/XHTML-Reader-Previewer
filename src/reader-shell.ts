@@ -173,6 +173,7 @@ export function readerShell(
       max-width: var(--reader-max-width);
       margin: auto;
       transition: max-width 0.2s ease;
+      will-change: transform;
     }
     img, video {
       display: block;
@@ -565,6 +566,58 @@ export function readerShell(
       margin: 0 1rem;
     }
 
+    /* Overscroll Cues (Moon+ Reader Style) */
+    .overscroll-cue {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.85rem;
+      color: var(--reader-fg);
+      opacity: 0;
+      pointer-events: auto;
+      cursor: pointer;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+      user-select: none;
+    }
+    .overscroll-cue.visible {
+      opacity: 0.75;
+    }
+    .overscroll-cue.active {
+      opacity: 1;
+      color: var(--reader-link);
+      font-weight: 600;
+    }
+    .overscroll-cue .overscroll-arrow {
+      font-size: 1.15rem;
+      display: inline-block;
+      transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .overscroll-cue.active .overscroll-arrow {
+      transform: scale(1.3) translateY(-2px);
+    }
+    .overscroll-cue.top {
+      position: fixed;
+      top: 3.2rem;
+      left: 0;
+      right: 0;
+      z-index: 5;
+      background: var(--reader-bg);
+      border-bottom: 1px solid rgba(156, 163, 175, 0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .overscroll-cue.bottom {
+      max-width: var(--reader-max-width);
+      margin: 2rem auto 3rem;
+      border-top: 1px dashed rgba(156, 163, 175, 0.25);
+      padding-top: 1.5rem;
+    }
+    body.paginated .overscroll-cue {
+      display: none !important;
+    }
+
     /* Light Theme */
     .light {
       --reader-bg: #f8fafc;
@@ -685,7 +738,17 @@ export function readerShell(
 
   ${sidebarHtml}
 
+  <div id="top-overscroll-cue" class="overscroll-cue top" aria-hidden="true">
+    <span class="overscroll-arrow">↓</span>
+    <span class="overscroll-label">Tarik untuk ke Bab Sebelumnya</span>
+  </div>
+
   <main id="content">${content.replace(/<style\b/gi, `<style nonce="${nonce}"`)}</main>
+
+  <div id="bottom-overscroll-cue" class="overscroll-cue bottom" aria-hidden="true">
+    <span class="overscroll-arrow">↑</span>
+    <span class="overscroll-label">Tarik untuk ke Bab Berikutnya</span>
+  </div>
 
   <button type="button" id="page-prev-arrow" class="page-nav-arrow" aria-label="Previous page (Shortcut: Left Arrow)" title="Previous page (Left Arrow)">‹</button>
   <button type="button" id="page-next-arrow" class="page-nav-arrow" aria-label="Next page (Shortcut: Right Arrow)" title="Next page (Right Arrow)">›</button>
@@ -727,6 +790,8 @@ export function readerShell(
     const pageNextArrow = document.getElementById('page-next-arrow');
     const pageCounter = document.getElementById('page-counter');
     const contentEl = document.getElementById('content') || document.querySelector('main');
+    const topCue = document.getElementById('top-overscroll-cue');
+    const bottomCue = document.getElementById('bottom-overscroll-cue');
 
     let isPaginated = ${prefs.readerMode === 'paginated'};
     let currentPage = 1;
@@ -855,6 +920,7 @@ export function readerShell(
 
     function navigateToChapter(message) {
       if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+      if (pullResetTimer) clearTimeout(pullResetTimer);
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
@@ -1007,6 +1073,231 @@ export function readerShell(
       scheduleSaveReadingPosition();
     }, { passive: true });
     updateProgress();
+
+    // Overscroll Resistance & Threshold Release (Moon+ Reader Style)
+    let pullOffset = 0;
+    let isTransitioningChapter = false;
+    let pullResetTimer = null;
+    const PULL_THRESHOLD = 55;
+    const MAX_PULL = 85;
+
+    function resetOverscrollCues() {
+      if (contentEl) {
+        contentEl.style.transition = 'transform 0.26s cubic-bezier(0.16, 1, 0.3, 1)';
+        contentEl.style.transform = 'translateY(0)';
+      }
+      if (bottomCue) {
+        bottomCue.classList.remove('visible', 'active');
+        const label = bottomCue.querySelector('.overscroll-label');
+        if (label) label.textContent = 'Tarik untuk ke Bab Berikutnya';
+      }
+      if (topCue) {
+        topCue.classList.remove('visible', 'active');
+        const label = topCue.querySelector('.overscroll-label');
+        if (label) label.textContent = 'Tarik untuk ke Bab Sebelumnya';
+      }
+      pullOffset = 0;
+    }
+
+    window.addEventListener('wheel', (event) => {
+      if (isPaginated || isTransitioningChapter) return;
+      if (tocSidebar && tocSidebar.classList.contains('open')) return;
+
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const isAtBottom = docHeight <= 0 || scrollY >= docHeight - 3;
+      const isAtTop = scrollY <= 3;
+
+      const hasNext = ${Boolean(navInfo?.hasNext)};
+      const hasPrev = ${Boolean(navInfo?.hasPrev)};
+
+      // Mentok Bawah (Tarik ke atas untuk ke Bab Berikutnya)
+      if (isAtBottom && event.deltaY > 0 && hasNext) {
+        if (pullResetTimer) clearTimeout(pullResetTimer);
+        pullOffset = Math.min(MAX_PULL, pullOffset + (event.deltaY * 0.3));
+        if (contentEl) {
+          contentEl.style.transition = 'none';
+          contentEl.style.transform = 'translateY(-' + pullOffset + 'px)';
+        }
+
+        if (bottomCue) {
+          bottomCue.classList.add('visible');
+          const label = bottomCue.querySelector('.overscroll-label');
+          if (pullOffset >= PULL_THRESHOLD) {
+            bottomCue.classList.add('active');
+            if (label) label.textContent = 'Lepaskan untuk membuka Bab Berikutnya';
+          } else {
+            bottomCue.classList.remove('active');
+            if (label) label.textContent = 'Tarik untuk ke Bab Berikutnya';
+          }
+        }
+
+        pullResetTimer = setTimeout(() => {
+          if (pullOffset >= PULL_THRESHOLD) {
+            isTransitioningChapter = true;
+            if (contentEl) {
+              contentEl.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
+              contentEl.style.transform = 'translateY(-120px)';
+              contentEl.style.opacity = '0';
+            }
+            setTimeout(() => {
+              navigateToChapter({ type: 'nextChapter' });
+            }, 180);
+          } else {
+            resetOverscrollCues();
+          }
+        }, 150);
+        return;
+      }
+
+      // Mentok Atas (Tarik ke bawah untuk ke Bab Sebelumnya)
+      if (isAtTop && event.deltaY < 0 && hasPrev) {
+        if (pullResetTimer) clearTimeout(pullResetTimer);
+        pullOffset = Math.min(MAX_PULL, pullOffset + (Math.abs(event.deltaY) * 0.3));
+        if (contentEl) {
+          contentEl.style.transition = 'none';
+          contentEl.style.transform = 'translateY(' + pullOffset + 'px)';
+        }
+
+        if (topCue) {
+          topCue.classList.add('visible');
+          const label = topCue.querySelector('.overscroll-label');
+          if (pullOffset >= PULL_THRESHOLD) {
+            topCue.classList.add('active');
+            if (label) label.textContent = 'Lepaskan untuk membuka Bab Sebelumnya';
+          } else {
+            topCue.classList.remove('active');
+            if (label) label.textContent = 'Tarik untuk ke Bab Sebelumnya';
+          }
+        }
+
+        pullResetTimer = setTimeout(() => {
+          if (pullOffset >= PULL_THRESHOLD) {
+            isTransitioningChapter = true;
+            if (contentEl) {
+              contentEl.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
+              contentEl.style.transform = 'translateY(120px)';
+              contentEl.style.opacity = '0';
+            }
+            setTimeout(() => {
+              navigateToChapter({ type: 'prevChapter' });
+            }, 180);
+          } else {
+            resetOverscrollCues();
+          }
+        }, 150);
+        return;
+      }
+    }, { passive: true });
+
+    // Touch events for touchscreen devices
+    let touchStartY = 0;
+    window.addEventListener('touchstart', (e) => {
+      if (isPaginated || isTransitioningChapter) return;
+      if (e.touches.length === 1) {
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (isPaginated || isTransitioningChapter || !touchStartY) return;
+      const currentY = e.touches[0].clientY;
+      const delta = currentY - touchStartY;
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const isAtBottom = docHeight <= 0 || scrollY >= docHeight - 3;
+      const isAtTop = scrollY <= 3;
+      const hasNext = ${Boolean(navInfo?.hasNext)};
+      const hasPrev = ${Boolean(navInfo?.hasPrev)};
+
+      if (isAtBottom && delta < -10 && hasNext) {
+        pullOffset = Math.min(MAX_PULL, Math.abs(delta) * 0.35);
+        if (contentEl) {
+          contentEl.style.transition = 'none';
+          contentEl.style.transform = 'translateY(-' + pullOffset + 'px)';
+        }
+        if (bottomCue) {
+          bottomCue.classList.add('visible');
+          const label = bottomCue.querySelector('.overscroll-label');
+          if (pullOffset >= PULL_THRESHOLD) {
+            bottomCue.classList.add('active');
+            if (label) label.textContent = 'Lepaskan untuk membuka Bab Berikutnya';
+          } else {
+            bottomCue.classList.remove('active');
+            if (label) label.textContent = 'Tarik untuk ke Bab Berikutnya';
+          }
+        }
+      } else if (isAtTop && delta > 10 && hasPrev) {
+        pullOffset = Math.min(MAX_PULL, delta * 0.35);
+        if (contentEl) {
+          contentEl.style.transition = 'none';
+          contentEl.style.transform = 'translateY(' + pullOffset + 'px)';
+        }
+        if (topCue) {
+          topCue.classList.add('visible');
+          const label = topCue.querySelector('.overscroll-label');
+          if (pullOffset >= PULL_THRESHOLD) {
+            topCue.classList.add('active');
+            if (label) label.textContent = 'Lepaskan untuk membuka Bab Sebelumnya';
+          } else {
+            topCue.classList.remove('active');
+            if (label) label.textContent = 'Tarik untuk ke Bab Sebelumnya';
+          }
+        }
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => {
+      if (isPaginated || isTransitioningChapter) return;
+      touchStartY = 0;
+      if (pullOffset >= PULL_THRESHOLD) {
+        isTransitioningChapter = true;
+        const isPullingUp = contentEl && contentEl.style.transform.indexOf('-') !== -1;
+        if (contentEl) {
+          contentEl.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
+          contentEl.style.transform = isPullingUp ? 'translateY(-120px)' : 'translateY(120px)';
+          contentEl.style.opacity = '0';
+        }
+        setTimeout(() => {
+          navigateToChapter({ type: isPullingUp ? 'nextChapter' : 'prevChapter' });
+        }, 180);
+      } else if (pullOffset > 0) {
+        resetOverscrollCues();
+      }
+    }, { passive: true });
+
+    // Clickable fallback on cues
+    if (bottomCue) {
+      bottomCue.addEventListener('click', () => {
+        if (!isPaginated && !isTransitioningChapter && ${Boolean(navInfo?.hasNext)}) {
+          isTransitioningChapter = true;
+          if (contentEl) {
+            contentEl.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
+            contentEl.style.transform = 'translateY(-120px)';
+            contentEl.style.opacity = '0';
+          }
+          setTimeout(() => {
+            navigateToChapter({ type: 'nextChapter' });
+          }, 180);
+        }
+      });
+    }
+
+    if (topCue) {
+      topCue.addEventListener('click', () => {
+        if (!isPaginated && !isTransitioningChapter && ${Boolean(navInfo?.hasPrev)}) {
+          isTransitioningChapter = true;
+          if (contentEl) {
+            contentEl.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
+            contentEl.style.transform = 'translateY(120px)';
+            contentEl.style.opacity = '0';
+          }
+          setTimeout(() => {
+            navigateToChapter({ type: 'prevChapter' });
+          }, 180);
+        }
+      });
+    }
 
     // TOC search filter
     if (tocSearch) {
