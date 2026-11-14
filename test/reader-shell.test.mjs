@@ -70,8 +70,6 @@ test('readerShell contains multi-column paginated mode controls, layout, and key
   assert.match(extensionBundle, /id=["']page-next-arrow["']/);
   assert.match(extensionBundle, /id=["']page-footer["']/);
   assert.match(extensionBundle, /id=["']page-counter["']/);
-  assert.match(extensionBundle, /id=["']footer-prev-btn["']/);
-  assert.match(extensionBundle, /id=["']footer-next-btn["']/);
 
   // Verify pagination controller logic
   assert.match(extensionBundle, /toggleMode/);

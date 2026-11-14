@@ -564,15 +564,6 @@ export function readerShell(
       opacity: 0.85;
       margin: 0 1rem;
     }
-    .page-footer-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-    .page-footer-actions button {
-      padding: 0.2rem 0.5rem;
-      font-size: 0.78rem;
-    }
 
     /* Light Theme */
     .light {
@@ -706,10 +697,6 @@ export function readerShell(
     <div class="page-footer-center">
       <span id="page-counter">Page 1 / 1</span>
     </div>
-    <div class="page-footer-actions">
-      <button type="button" id="footer-prev-btn" aria-label="Previous page">‹ Prev</button>
-      <button type="button" id="footer-next-btn" aria-label="Next page">Next ›</button>
-    </div>
   </footer>
 
   <div id="footnote-popover" class="footnote-popover" role="dialog" aria-modal="false" aria-label="Footnote" hidden>
@@ -738,8 +725,6 @@ export function readerShell(
     const modeBtn = document.getElementById('mode-btn');
     const pagePrevArrow = document.getElementById('page-prev-arrow');
     const pageNextArrow = document.getElementById('page-next-arrow');
-    const footerPrevBtn = document.getElementById('footer-prev-btn');
-    const footerNextBtn = document.getElementById('footer-next-btn');
     const pageCounter = document.getElementById('page-counter');
     const contentEl = document.getElementById('content') || document.querySelector('main');
 
@@ -775,9 +760,7 @@ export function readerShell(
       const disablePrev = currentPage <= 1 && !hasPrev;
       const disableNext = currentPage >= totalPages && !hasNext;
       if (pagePrevArrow) pagePrevArrow.disabled = disablePrev;
-      if (footerPrevBtn) footerPrevBtn.disabled = disablePrev;
       if (pageNextArrow) pageNextArrow.disabled = disableNext;
-      if (footerNextBtn) footerNextBtn.disabled = disableNext;
     }
 
     function renderPage(smooth = true) {
@@ -869,8 +852,6 @@ export function readerShell(
 
     if (pagePrevArrow) pagePrevArrow.addEventListener('click', prevPage);
     if (pageNextArrow) pageNextArrow.addEventListener('click', nextPage);
-    if (footerPrevBtn) footerPrevBtn.addEventListener('click', prevPage);
-    if (footerNextBtn) footerNextBtn.addEventListener('click', nextPage);
 
     function navigateToChapter(message) {
       if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
