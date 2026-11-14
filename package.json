@@ -7,6 +7,15 @@
   "publisher": "selvagant",
   "author": "selvagant",
   "license": "MIT",
+  "pricing": "Free",
+  "homepage": "https://github.com/intxdv/XHTML-Reader-Previewer#readme",
+  "bugs": {
+    "url": "https://github.com/intxdv/XHTML-Reader-Previewer/issues"
+  },
+  "galleryBanner": {
+    "color": "#18181b",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/intxdv/XHTML-Reader-Previewer.git"

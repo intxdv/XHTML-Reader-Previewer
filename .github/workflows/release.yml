@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Release & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run verification & tests
+        run: |
+          npm run check
+          npm test
+
+      - name: Package VSIX
+        run: npx @vscode/vsce package
+
+      - name: Compute SHA-256 Checksum
+        id: checksum
+        run: |
+          VSIX_FILE=$(ls *.vsix | head -n 1)
+          HASH=$(sha256sum "$VSIX_FILE" | awk '{print $1}')
+          echo "vsix_file=$VSIX_FILE" >> $GITHUB_OUTPUT
+          echo "vsix_hash=$HASH" >> $GITHUB_OUTPUT
+          echo "Packaged $VSIX_FILE with SHA256 $HASH"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.vsix"
+          generate_release_notes: true
+          body: |
+            ### 📦 VSIX Package Integrity
+            - **File**: `${{ steps.checksum.outputs.vsix_file }}`
+            - **SHA-256**: `${{ steps.checksum.outputs.vsix_hash }}`
+
+            ### 🚀 Installation
+            ```bash
+            code --install-extension ${{ steps.checksum.outputs.vsix_file }}
+            ```
+
+      - name: Publish to Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish -p $VSCE_PAT

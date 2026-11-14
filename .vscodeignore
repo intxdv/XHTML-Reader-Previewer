@@ -1,3 +1,4 @@
+.github/**
 .vscode/**
 .vscode-test/**
 src/**
@@ -7,4 +8,5 @@ resource/**
 .agents/**
 WORKSPACE.md
 tsconfig.json
+.gitignore
 *.vsix
