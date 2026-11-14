@@ -61,7 +61,8 @@ export function readerShell(
   webview: vscode.Webview,
   navInfo?: ReaderNavInfo,
   preferences?: ReaderPreferences,
-  initialLocation?: ReadingLocation
+  initialLocation?: ReadingLocation,
+  resetToTop = false
 ): string {
   const nonce = randomBytes(16).toString('base64');
   const title = escapeHtml(vscode.workspace.asRelativePath(source, false) || source.fsPath);
@@ -505,7 +506,7 @@ export function readerShell(
     }
   </style>
 </head>
-<body data-fragment="${initialFragment}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}">
+<body data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}">
   <header id="toolbar" aria-label="Reader controls">
     ${tocBtnHtml}
 
@@ -539,6 +540,10 @@ export function readerShell(
   </div>
 
   <script nonce="${nonce}">
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+
     const vscode = acquireVsCodeApi();
     const popover = document.getElementById('footnote-popover');
     const caret = document.getElementById('footnote-caret');
@@ -552,6 +557,14 @@ export function readerShell(
     const tocSidebar = document.getElementById('toc-sidebar');
     const tocBackdrop = document.getElementById('toc-backdrop');
     const tocSearch = document.getElementById('toc-search');
+
+    function navigateToChapter(message) {
+      if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      vscode.postMessage(message);
+    }
 
     let size = ${prefs.fontSize};
     const themes = ['dark', 'light', 'sepia'];
@@ -821,10 +834,10 @@ export function readerShell(
         notifyPreferences();
       }
       if (action === 'prev-chapter') {
-        vscode.postMessage({ type: 'prevChapter' });
+        navigateToChapter({ type: 'prevChapter' });
       }
       if (action === 'next-chapter') {
-        vscode.postMessage({ type: 'nextChapter' });
+        navigateToChapter({ type: 'nextChapter' });
       }
     });
 
@@ -852,7 +865,7 @@ export function readerShell(
       if (link.classList.contains('toc-item')) {
         event.preventDefault();
         toggleToc(false);
-        vscode.postMessage({ type: 'openLink', href });
+        navigateToChapter({ type: 'openLink', href });
         return;
       }
 
@@ -897,10 +910,10 @@ export function readerShell(
         }
       }
       if (event.key === '[' || (event.altKey && event.key === 'ArrowLeft')) {
-        vscode.postMessage({ type: 'prevChapter' });
+        navigateToChapter({ type: 'prevChapter' });
       }
       if (event.key === ']' || (event.altKey && event.key === 'ArrowRight')) {
-        vscode.postMessage({ type: 'nextChapter' });
+        navigateToChapter({ type: 'nextChapter' });
       }
     });
 
@@ -908,6 +921,7 @@ export function readerShell(
     window.addEventListener('resize', hidePopover);
 
     const initial = document.body.dataset.fragment;
+    const isResetToTop = document.body.dataset.resetToTop === 'true';
     const initialRatio = parseFloat(document.body.dataset.initialRatio || '0');
     const initialScrollY = parseFloat(document.body.dataset.initialScrollY || '0');
     const initialAnchorId = document.body.dataset.initialAnchorId || '';
@@ -916,7 +930,18 @@ export function readerShell(
     window.addEventListener('wheel', () => { userScrolled = true; }, { passive: true, once: true });
     window.addEventListener('touchmove', () => { userScrolled = true; }, { passive: true, once: true });
 
+    function forceTop() {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      if (progressBar) progressBar.style.width = '0%';
+    }
+
     function restorePosition() {
+      if (isResetToTop) {
+        forceTop();
+        return;
+      }
       if (userScrolled) return;
       if (initial) {
         scrollToFragment(initial);
@@ -940,17 +965,24 @@ export function readerShell(
           return;
         }
       }
-      // If no initial fragment or saved position, explicitly reset to the top of the chapter!
-      window.scrollTo({ top: 0, behavior: 'instant' });
+      forceTop();
     }
 
-    restorePosition();
-    requestAnimationFrame(restorePosition);
-    window.addEventListener('load', () => {
-      if (!userScrolled) {
-        restorePosition();
-      }
-    });
+    if (isResetToTop) {
+      forceTop();
+      requestAnimationFrame(forceTop);
+      setTimeout(forceTop, 30);
+      setTimeout(forceTop, 100);
+      window.addEventListener('load', forceTop, { once: true });
+    } else {
+      restorePosition();
+      requestAnimationFrame(restorePosition);
+      window.addEventListener('load', () => {
+        if (!userScrolled) {
+          restorePosition();
+        }
+      }, { once: true });
+    }
   </script>
 </body>
 </html>`;

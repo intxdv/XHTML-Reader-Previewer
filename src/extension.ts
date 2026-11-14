@@ -165,7 +165,7 @@ async function openPreview(
       panel.title = getPanelTitle(currentSource, epubPackage, spineIndex);
       const preferences = stateManager?.getPreferences();
       const location = resetToTop ? undefined : stateManager?.getReadingLocation(currentSource.toString());
-      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location);
+      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location, resetToTop);
       pendingFragment = undefined;
     } catch (error) {
       panel.webview.html = errorShell(error);
@@ -233,10 +233,9 @@ async function openPreview(
     if (isOpenLinkMessage(message)) {
       const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
       if (target) {
-        const isDifferentChapter = target.source.path.toLowerCase() !== currentSource.path.toLowerCase();
         currentSource = target.source;
         pendingFragment = target.fragment;
-        void render(isDifferentChapter && !target.fragment);
+        void render(!target.fragment);
       }
     }
   });
