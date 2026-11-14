@@ -54,13 +54,17 @@ const widthLabelMap: Record<string, string> = {
   compact: 'Width: Compact'
 };
 
-const ICONS = {
-  book: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`,
-  openBook: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>`,
-  scroll: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`,
-  settings: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>`,
-  chevronLeft: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>`,
-  chevronRight: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>`
+const PHOSPHOR = {
+  sidebarSimple: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM96,200H40V56H96Zm120,0H112V56H216Z"/></svg>`,
+  magnifyingGlass: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" aria-hidden="true"><circle cx="112" cy="112" r="80"/><line x1="168.57" y1="168.57" x2="224" y2="224"/></svg>`,
+  bookOpen: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" aria-hidden="true"><path d="M128,48V208c-32-24-72-32-112-32V40C56,40,96,48,128,48Z"/><path d="M128,48V208c32-24,72-32,112-32V40C200,40,160,48,128,48Z"/></svg>`,
+  caretLeft: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><polyline points="160 208 80 128 160 48"/></svg>`,
+  caretRight: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><polyline points="96 48 176 128 96 208"/></svg>`,
+  arrowsOutLineVertical: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" aria-hidden="true"><polyline points="104 32 128 8 152 32"/><line x1="128" y1="8" x2="128" y2="248"/><polyline points="152 224 128 248 104 224"/><line x1="40" y1="128" x2="216" y2="128"/></svg>`,
+  slidersHorizontal: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" aria-hidden="true"><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="192" x2="216" y2="192"/><line x1="96" y1="32" x2="96" y2="96"/><line x1="160" y1="96" x2="160" y2="160"/><line x1="104" y1="160" x2="104" y2="224"/></svg>`,
+  dotsThree: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M144,128a16,16,0,1,1-16-16A16,16,0,0,1,144,128ZM60,112a16,16,0,1,0,16,16A16,16,0,0,0,60,112Zm136,0a16,16,0,1,0,16,16A16,16,0,0,0,196,112Z"/></svg>`,
+  bookmarkSimple: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.76,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.76-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z"/></svg>`,
+  x: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="14" height="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>`
 };
 
 export function readerShell(
@@ -102,7 +106,7 @@ export function readerShell(
   const hasToc = navInfo && Array.isArray(navInfo.toc) && navInfo.toc.length > 0;
 
   const tocBtnHtml = hasToc
-    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)">${ICONS.book} <span>Contents</span></button>`
+    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)">${PHOSPHOR.sidebarSimple} <span>Contents</span></button>`
     : '';
 
   const navHtml = hasNav
@@ -130,9 +134,10 @@ export function readerShell(
           <div class="toc-book-title">${escapeHtml(navInfo?.bookTitle || 'Table of Contents')}</div>
           ${navInfo?.creator ? `<div class="toc-book-author">${escapeHtml(navInfo.creator)}</div>` : ''}
         </div>
-        <button type="button" data-action="close-toc" class="toc-close-btn" aria-label="Close Table of Contents">✕</button>
+        <button type="button" data-action="close-toc" class="toc-close-btn" aria-label="Close Table of Contents">${PHOSPHOR.x}</button>
       </div>
       <div class="toc-search-wrap">
+        <span class="toc-search-icon">${PHOSPHOR.magnifyingGlass}</span>
         <input type="text" id="toc-search" placeholder="Filter chapters..." aria-label="Filter chapters" />
       </div>
       <nav class="toc-list" id="toc-list">
@@ -414,23 +419,37 @@ export function readerShell(
       opacity: 0.7;
       margin-top: 0.2rem;
     }
-    .toc-close-btn {
+    .toc-close-btn, .settings-close-btn {
       background: transparent;
       border: none;
       color: inherit;
-      font-size: 1.1rem;
-      padding: 0.2rem 0.4rem;
+      padding: 0.25rem;
       cursor: pointer;
-      opacity: 0.75;
+      opacity: 0.7;
       border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.15s ease, background 0.15s ease;
     }
-    .toc-close-btn:hover {
+    .toc-close-btn:hover, .settings-close-btn:hover {
       opacity: 1;
       background: rgba(255, 255, 255, 0.1);
     }
     .toc-search-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
       padding: 0.5rem 1rem;
       border-bottom: 1px solid rgba(156, 163, 175, 0.1);
+    }
+    .toc-search-icon {
+      position: absolute;
+      left: 1.55rem;
+      display: inline-flex;
+      align-items: center;
+      opacity: 0.5;
+      pointer-events: none;
     }
     .toc-search-wrap input {
       width: 100%;
@@ -438,7 +457,7 @@ export function readerShell(
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid rgba(156, 163, 175, 0.2);
       border-radius: 4px;
-      padding: 0.4rem 0.65rem;
+      padding: 0.4rem 0.65rem 0.4rem 2rem;
       color: inherit;
       font-size: 0.82rem;
       outline: none;
@@ -952,16 +971,16 @@ export function readerShell(
     <div class="toolbar-center">
       ${navInfo?.chapterIndex ? `
         <div class="chapter-nav-inline">
-          <button type="button" data-action="prev-chapter" id="prev-btn" class="nav-arrow-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo?.hasPrev ? '' : 'disabled'} aria-label="Previous chapter">${ICONS.chevronLeft}</button>
+          <button type="button" data-action="prev-chapter" id="prev-btn" class="nav-arrow-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo?.hasPrev ? '' : 'disabled'} aria-label="Previous chapter">${PHOSPHOR.caretLeft}</button>
           <span class="chapter-badge" title="${escapeHtml(navInfo?.bookTitle || '')}">${navInfo.chapterIndex} / ${navInfo.totalChapters}</span>
-          <button type="button" data-action="next-chapter" id="next-btn" class="nav-arrow-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo?.hasNext ? '' : 'disabled'} aria-label="Next chapter">${ICONS.chevronRight}</button>
+          <button type="button" data-action="next-chapter" id="next-btn" class="nav-arrow-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo?.hasNext ? '' : 'disabled'} aria-label="Next chapter">${PHOSPHOR.caretRight}</button>
         </div>
       ` : ''}
     </div>
 
     <div class="toolbar-right">
-      <button type="button" data-action="mode" id="mode-btn" class="icon-btn" aria-label="Reading Mode" title="Reading Mode: ${prefs.readerMode === 'paginated' ? 'Paginated (Click to switch to Continuous Scroll)' : 'Continuous Scroll (Click to switch to Paginated)'}">${prefs.readerMode === 'paginated' ? ICONS.openBook : ICONS.scroll}</button>
-      <button type="button" data-action="toggle-settings" id="settings-btn" class="icon-btn" aria-label="Reader settings" title="Settings (Keyboard: S)">${ICONS.settings}</button>
+      <button type="button" data-action="mode" id="mode-btn" class="icon-btn" aria-label="Reading Mode" title="Reading Mode: ${prefs.readerMode === 'paginated' ? 'Paginated (Click to switch to Continuous Scroll)' : 'Continuous Scroll (Click to switch to Paginated)'}">${prefs.readerMode === 'paginated' ? PHOSPHOR.bookOpen : PHOSPHOR.arrowsOutLineVertical}</button>
+      <button type="button" data-action="toggle-settings" id="settings-btn" class="icon-btn" aria-label="Reader settings" title="Settings (Keyboard: S)">${PHOSPHOR.slidersHorizontal}</button>
     </div>
 
     <div id="progress-track" aria-hidden="true">
@@ -972,7 +991,7 @@ export function readerShell(
   <div id="settings-popover" class="settings-popover" role="dialog" aria-modal="false" aria-label="Reading Settings" hidden>
     <div class="settings-popover-header">
       <span class="settings-popover-title">Reading Settings</span>
-      <button type="button" data-action="close-settings" class="settings-close-btn" aria-label="Close settings">✕</button>
+      <button type="button" data-action="close-settings" class="settings-close-btn" aria-label="Close settings">${PHOSPHOR.x}</button>
     </div>
 
     <div class="settings-row">
@@ -1185,7 +1204,7 @@ export function readerShell(
         isPaginated = true;
         document.body.classList.add('paginated');
         if (modeBtn) {
-          modeBtn.innerHTML = '${ICONS.openBook}';
+          modeBtn.innerHTML = '${PHOSPHOR.bookOpen}';
           modeBtn.title = 'Reading Mode: Paginated (Click to switch to Continuous Scroll)';
         }
         updateSettingsPills();
@@ -1203,7 +1222,7 @@ export function readerShell(
         isPaginated = false;
         document.body.classList.remove('paginated');
         if (modeBtn) {
-          modeBtn.innerHTML = '${ICONS.scroll}';
+          modeBtn.innerHTML = '${PHOSPHOR.arrowsOutLineVertical}';
           modeBtn.title = 'Reading Mode: Continuous Scroll (Click to switch to Paginated)';
         }
         updateSettingsPills();
