@@ -62,7 +62,8 @@ export function readerShell(
   navInfo?: ReaderNavInfo,
   preferences?: ReaderPreferences,
   initialLocation?: ReadingLocation,
-  resetToTop = false
+  resetToTop = false,
+  startAtBottom = false
 ): string {
   const nonce = randomBytes(16).toString('base64');
   const title = escapeHtml(vscode.workspace.asRelativePath(source, false) || source.fsPath);
@@ -711,7 +712,7 @@ export function readerShell(
     }
   </style>
 </head>
-<body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}">
+<body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-start-at-bottom="${startAtBottom ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}">
   <header id="toolbar" aria-label="Reader controls">
     ${tocBtnHtml}
 
@@ -862,7 +863,7 @@ export function readerShell(
       } else {
         const hasPrev = ${Boolean(navInfo?.hasPrev)};
         if (hasPrev) {
-          navigateToChapter({ type: 'prevChapter' });
+          navigateToChapter({ type: 'prevChapter', startAtBottom: true });
         }
       }
     }
@@ -1180,7 +1181,7 @@ export function readerShell(
               contentEl.style.opacity = '0';
             }
             setTimeout(() => {
-              navigateToChapter({ type: 'prevChapter' });
+              navigateToChapter({ type: 'prevChapter', startAtBottom: true });
             }, 180);
           } else {
             resetOverscrollCues();
@@ -1259,7 +1260,7 @@ export function readerShell(
           contentEl.style.opacity = '0';
         }
         setTimeout(() => {
-          navigateToChapter({ type: isPullingUp ? 'nextChapter' : 'prevChapter' });
+          navigateToChapter({ type: isPullingUp ? 'nextChapter' : 'prevChapter', startAtBottom: !isPullingUp });
         }, 180);
       } else if (pullOffset > 0) {
         resetOverscrollCues();
@@ -1293,7 +1294,7 @@ export function readerShell(
             contentEl.style.opacity = '0';
           }
           setTimeout(() => {
-            navigateToChapter({ type: 'prevChapter' });
+            navigateToChapter({ type: 'prevChapter', startAtBottom: true });
           }, 180);
         }
       });
@@ -1469,7 +1470,7 @@ export function readerShell(
         toggleMode();
       }
       if (action === 'prev-chapter') {
-        navigateToChapter({ type: 'prevChapter' });
+        navigateToChapter({ type: 'prevChapter', startAtBottom: true });
       }
       if (action === 'next-chapter') {
         navigateToChapter({ type: 'nextChapter' });
@@ -1566,7 +1567,7 @@ export function readerShell(
         }
       }
       if (event.key === '[' || (event.altKey && event.key === 'ArrowLeft')) {
-        navigateToChapter({ type: 'prevChapter' });
+        navigateToChapter({ type: 'prevChapter', startAtBottom: true });
       }
       if (event.key === ']' || (event.altKey && event.key === 'ArrowRight')) {
         navigateToChapter({ type: 'nextChapter' });
@@ -1583,6 +1584,7 @@ export function readerShell(
 
     const initial = document.body.dataset.fragment;
     const isResetToTop = document.body.dataset.resetToTop === 'true';
+    const isStartAtBottom = document.body.dataset.startAtBottom === 'true';
     const initialRatio = parseFloat(document.body.dataset.initialRatio || '0');
     const initialScrollY = parseFloat(document.body.dataset.initialScrollY || '0');
     const initialAnchorId = document.body.dataset.initialAnchorId || '';
@@ -1603,7 +1605,25 @@ export function readerShell(
       }
     }
 
+    function forceBottom() {
+      if (isPaginated) {
+        totalPages = computeTotalPages();
+        currentPage = totalPages;
+        renderPage(false);
+      } else {
+        const bottomY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        window.scrollTo({ top: bottomY, left: 0, behavior: 'instant' });
+        document.documentElement.scrollTop = bottomY;
+        document.body.scrollTop = bottomY;
+        updateProgress();
+      }
+    }
+
     function restorePosition() {
+      if (isStartAtBottom) {
+        forceBottom();
+        return;
+      }
       if (isResetToTop) {
         forceTop();
         return;
@@ -1657,7 +1677,14 @@ export function readerShell(
       forceTop();
     }
 
-    if (isResetToTop) {
+    if (isStartAtBottom) {
+      forceBottom();
+      requestAnimationFrame(forceBottom);
+      setTimeout(forceBottom, 30);
+      setTimeout(forceBottom, 100);
+      setTimeout(forceBottom, 250);
+      window.addEventListener('load', forceBottom, { once: true });
+    } else if (isResetToTop) {
       forceTop();
       requestAnimationFrame(forceTop);
       setTimeout(forceTop, 30);

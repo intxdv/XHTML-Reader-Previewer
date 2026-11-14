@@ -104,4 +104,9 @@ test('readerShell contains Moon+ Reader style continuous overscroll cues and cha
   assert.match(extensionBundle, /addEventListener\(["']wheel["']/);
   assert.match(extensionBundle, /addEventListener\(["']touchstart["']/);
   assert.match(extensionBundle, /addEventListener\(["']touchmove["']/);
+
+  // Verify natural backward chapter scroll landing (starts from bottom on prevChapter)
+  assert.match(extensionBundle, /forceBottom/);
+  assert.match(extensionBundle, /data-start-at-bottom/);
+  assert.match(extensionBundle, /startAtBottom:\s*true/);
 });

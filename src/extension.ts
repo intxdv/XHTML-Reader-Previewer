@@ -197,7 +197,7 @@ async function attachReaderToWebview(
 
   let timer: NodeJS.Timeout | undefined;
 
-  const render = async (resetToTop = false): Promise<void> => {
+  const render = async (resetToTop = false, startAtBottom = false): Promise<void> => {
     try {
       const xhtml = await readSource(currentSource);
       const chapterDir = parentUri(currentSource);
@@ -232,8 +232,8 @@ async function attachReaderToWebview(
 
       panel.title = getPanelTitle(currentSource, epubPackage, spineIndex);
       const preferences = stateManager?.getPreferences();
-      const location = resetToTop ? undefined : stateManager?.getReadingLocation(currentSource.toString());
-      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location, resetToTop);
+      const location = (resetToTop || startAtBottom) ? undefined : stateManager?.getReadingLocation(currentSource.toString());
+      panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location, resetToTop, startAtBottom);
       pendingFragment = undefined;
     } catch (error) {
       panel.webview.html = errorShell(error);
@@ -264,7 +264,8 @@ async function attachReaderToWebview(
         if (currentIndex > 0) {
           currentSource = epubPackage.spine[currentIndex - 1].uri;
           pendingFragment = undefined;
-          void render(true);
+          const startAtBottom = (message as { startAtBottom?: boolean }).startAtBottom ?? true;
+          void render(false, startAtBottom);
         }
       }
       return;
@@ -278,7 +279,7 @@ async function attachReaderToWebview(
         if (currentIndex >= 0 && currentIndex < epubPackage.spine.length - 1) {
           currentSource = epubPackage.spine[currentIndex + 1].uri;
           pendingFragment = undefined;
-          void render(true);
+          void render(true, false);
         }
       }
       return;
@@ -342,7 +343,7 @@ function getPanelTitle(source: vscode.Uri, epub?: EpubPackage, spineIndex = -1):
   return `${epub.title} — ${fileName}`;
 }
 
-function isPrevChapterMessage(message: unknown): message is { type: 'prevChapter' } {
+function isPrevChapterMessage(message: unknown): message is { type: 'prevChapter'; startAtBottom?: boolean } {
   return typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'prevChapter';
 }
 
