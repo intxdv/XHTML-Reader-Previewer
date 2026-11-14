@@ -4,6 +4,7 @@ export interface ReaderPreferences {
   fontFamily: 'serif' | 'sans' | 'mono';
   lineHeight: 'normal' | 'relaxed' | 'tight';
   readerWidth: 'normal' | 'wide' | 'compact';
+  readerMode: 'scroll' | 'paginated';
 }
 
 export interface ReadingLocation {
@@ -23,7 +24,8 @@ export const DEFAULT_PREFERENCES: ReaderPreferences = {
   fontSize: 18,
   fontFamily: 'serif',
   lineHeight: 'normal',
-  readerWidth: 'normal'
+  readerWidth: 'normal',
+  readerMode: 'scroll'
 };
 
 const PREFERENCES_KEY = 'xhtmlReader.preferences';
@@ -40,7 +42,8 @@ export class StateManager {
       fontSize: typeof saved.fontSize === 'number' && saved.fontSize >= 12 && saved.fontSize <= 32 ? saved.fontSize : DEFAULT_PREFERENCES.fontSize,
       fontFamily: saved.fontFamily === 'serif' || saved.fontFamily === 'sans' || saved.fontFamily === 'mono' ? saved.fontFamily : DEFAULT_PREFERENCES.fontFamily,
       lineHeight: saved.lineHeight === 'normal' || saved.lineHeight === 'relaxed' || saved.lineHeight === 'tight' ? saved.lineHeight : DEFAULT_PREFERENCES.lineHeight,
-      readerWidth: saved.readerWidth === 'normal' || saved.readerWidth === 'wide' || saved.readerWidth === 'compact' ? saved.readerWidth : DEFAULT_PREFERENCES.readerWidth
+      readerWidth: saved.readerWidth === 'normal' || saved.readerWidth === 'wide' || saved.readerWidth === 'compact' ? saved.readerWidth : DEFAULT_PREFERENCES.readerWidth,
+      readerMode: saved.readerMode === 'paginated' ? 'paginated' : 'scroll'
     };
   }
 

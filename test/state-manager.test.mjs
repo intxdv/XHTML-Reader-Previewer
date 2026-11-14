@@ -35,7 +35,8 @@ test('StateManager updates and validates preferences', async () => {
     fontSize: 22,
     fontFamily: 'mono',
     lineHeight: 'relaxed',
-    readerWidth: 'wide'
+    readerWidth: 'wide',
+    readerMode: 'paginated'
   });
 
   const prefs = manager.getPreferences();
@@ -44,18 +45,21 @@ test('StateManager updates and validates preferences', async () => {
   assert.equal(prefs.fontFamily, 'mono');
   assert.equal(prefs.lineHeight, 'relaxed');
   assert.equal(prefs.readerWidth, 'wide');
+  assert.equal(prefs.readerMode, 'paginated');
 
   // Test invalid values fallback safely
   await manager.savePreferences({
     theme: 'invalid-theme',
     fontSize: 999,
-    fontFamily: 'non-existent'
+    fontFamily: 'non-existent',
+    readerMode: 'invalid-mode'
   });
 
   const fallbackPrefs = manager.getPreferences();
   assert.equal(fallbackPrefs.theme, 'dark'); // fallback
   assert.equal(fallbackPrefs.fontSize, 18); // fallback
   assert.equal(fallbackPrefs.fontFamily, 'serif'); // fallback
+  assert.equal(fallbackPrefs.readerMode, 'scroll'); // fallback
 });
 
 test('StateManager saves and retrieves reading locations by URI', async () => {

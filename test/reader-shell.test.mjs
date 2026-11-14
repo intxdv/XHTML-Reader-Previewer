@@ -50,3 +50,38 @@ test('readerShell contains TOC sidebar, backdrop, search filter, and toggle butt
   assert.match(extensionBundle, /id=["']toc-search["']/);
   assert.match(extensionBundle, /toggleToc/);
 });
+
+test('readerShell contains multi-column paginated mode controls, layout, and keyboard handlers', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify mode button in toolbar
+  assert.match(extensionBundle, /id=["']mode-btn["']/);
+  assert.match(extensionBundle, /data-action=["']mode["']/);
+
+  // Verify CSS multi-column pagination rules
+  assert.match(extensionBundle, /body\.paginated/);
+  assert.match(extensionBundle, /column-width/);
+  assert.match(extensionBundle, /column-gap/);
+  assert.match(extensionBundle, /column-fill:\s*auto/);
+
+  // Verify floating navigation chevrons and page footer
+  assert.match(extensionBundle, /id=["']page-prev-arrow["']/);
+  assert.match(extensionBundle, /id=["']page-next-arrow["']/);
+  assert.match(extensionBundle, /id=["']page-footer["']/);
+  assert.match(extensionBundle, /id=["']page-counter["']/);
+  assert.match(extensionBundle, /id=["']footer-prev-btn["']/);
+  assert.match(extensionBundle, /id=["']footer-next-btn["']/);
+
+  // Verify pagination controller logic
+  assert.match(extensionBundle, /toggleMode/);
+  assert.match(extensionBundle, /renderPage/);
+  assert.match(extensionBundle, /nextPage/);
+  assert.match(extensionBundle, /prevPage/);
+  assert.match(extensionBundle, /computeTotalPages/);
+  assert.match(extensionBundle, /updatePagination/);
+
+  // Verify keyboard navigation support (ArrowRight / ArrowLeft / Space)
+  assert.match(extensionBundle, /ArrowRight/);
+  assert.match(extensionBundle, /ArrowLeft/);
+});

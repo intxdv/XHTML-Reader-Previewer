@@ -73,7 +73,8 @@ export function readerShell(
     fontSize: preferences?.fontSize ?? DEFAULT_PREFERENCES.fontSize,
     fontFamily: preferences?.fontFamily ?? DEFAULT_PREFERENCES.fontFamily,
     lineHeight: preferences?.lineHeight ?? DEFAULT_PREFERENCES.lineHeight,
-    readerWidth: preferences?.readerWidth ?? DEFAULT_PREFERENCES.readerWidth
+    readerWidth: preferences?.readerWidth ?? DEFAULT_PREFERENCES.readerWidth,
+    readerMode: preferences?.readerMode ?? DEFAULT_PREFERENCES.readerMode
   };
 
   const htmlClass = prefs.theme === 'dark' ? '' : ` class="${prefs.theme}"`;
@@ -84,6 +85,8 @@ export function readerShell(
   const initialFontLabel = fontLabelMap[prefs.fontFamily] ?? 'Font: Serif';
   const initialSpacingLabel = spacingLabelMap[prefs.lineHeight] ?? 'Spacing: Normal';
   const initialWidthLabel = widthLabelMap[prefs.readerWidth] ?? 'Width: Normal';
+  const initialModeLabel = prefs.readerMode === 'paginated' ? 'Mode: Paginated' : 'Mode: Scroll';
+  const bodyClasses = [prefs.readerMode === 'paginated' ? 'paginated' : ''].filter(Boolean).join(' ');
 
   const hasNav = navInfo && typeof navInfo.totalChapters === 'number' && navInfo.totalChapters > 0;
   const hasToc = navInfo && Array.isArray(navInfo.toc) && navInfo.toc.length > 0;
@@ -437,6 +440,140 @@ export function readerShell(
       margin: 0.25rem 0;
     }
 
+    /* Paginated Mode */
+    body.paginated {
+      height: 100vh;
+      overflow: hidden;
+      padding-top: 4.2rem;
+      padding-bottom: 2.8rem;
+      padding-left: 0;
+      padding-right: 0;
+      box-sizing: border-box;
+    }
+    body.paginated main {
+      height: calc(100vh - 7.5rem);
+      width: min(var(--reader-max-width), calc(100vw - 6rem));
+      max-width: none;
+      margin: 0 auto;
+      column-width: calc(min(var(--reader-max-width), calc(100vw - 6rem)));
+      column-gap: 4rem;
+      column-fill: auto;
+      overflow-x: hidden;
+      overflow-y: hidden;
+      box-sizing: border-box;
+      scroll-behavior: auto;
+    }
+    body.paginated img, body.paginated video, body.paginated svg {
+      max-width: 100%;
+      max-height: calc(100vh - 10rem);
+      object-fit: contain;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    body.paginated h1, body.paginated h2, body.paginated h3, body.paginated h4, body.paginated h5, body.paginated h6 {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+    body.paginated p, body.paginated li, body.paginated blockquote {
+      break-inside: auto;
+    }
+    body.paginated pre, body.paginated table {
+      break-inside: avoid;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    /* Floating Page Chevrons */
+    .page-nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 15;
+      width: 2.5rem;
+      height: 3.5rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(17, 24, 39, 0.65);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(75, 85, 99, 0.4);
+      border-radius: 0.5rem;
+      color: var(--reader-fg);
+      font-size: 1.6rem;
+      cursor: pointer;
+      transition: opacity 0.2s, background 0.2s, transform 0.15s;
+      user-select: none;
+      opacity: 0.4;
+    }
+    .page-nav-arrow:hover:not(:disabled) {
+      opacity: 1;
+      background: rgba(31, 41, 55, 0.9);
+      transform: translateY(-50%) scale(1.05);
+    }
+    .page-nav-arrow:disabled {
+      opacity: 0.12;
+      cursor: not-allowed;
+    }
+    #page-prev-arrow {
+      left: 0.6rem;
+    }
+    #page-next-arrow {
+      right: 0.6rem;
+    }
+    body.paginated .page-nav-arrow {
+      display: flex;
+    }
+
+    /* Pagination Footer */
+    #page-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2.4rem;
+      z-index: 10;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.25rem;
+      background: #111827e8;
+      backdrop-filter: blur(8px);
+      border-top: 1px solid #374151;
+      font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+      font-size: 0.82rem;
+      color: var(--reader-fg);
+      user-select: none;
+    }
+    body.paginated #page-footer {
+      display: flex;
+    }
+    .page-footer-info {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 0.65;
+      font-size: 0.8rem;
+    }
+    .page-footer-center {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      opacity: 0.85;
+      margin: 0 1rem;
+    }
+    .page-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .page-footer-actions button {
+      padding: 0.2rem 0.5rem;
+      font-size: 0.78rem;
+    }
+
     /* Light Theme */
     .light {
       --reader-bg: #f8fafc;
@@ -469,6 +606,18 @@ export function readerShell(
     .light .toc-search-wrap input {
       background: #ffffff;
       border-color: #cbd5e1;
+    }
+    .light .page-nav-arrow {
+      background: rgba(248, 250, 252, 0.75);
+      border-color: rgba(203, 213, 225, 0.8);
+      color: #172033;
+    }
+    .light .page-nav-arrow:hover:not(:disabled) {
+      background: rgba(226, 232, 240, 0.95);
+    }
+    .light #page-footer {
+      background: #f8fafce8;
+      border-top-color: #cbd5e1;
     }
 
     /* Sepia Theme */
@@ -504,9 +653,21 @@ export function readerShell(
       background: #faf4e8;
       border-color: #d4bc91;
     }
+    .sepia .page-nav-arrow {
+      background: rgba(251, 240, 217, 0.75);
+      border-color: rgba(212, 188, 145, 0.8);
+      color: #5f4b32;
+    }
+    .sepia .page-nav-arrow:hover:not(:disabled) {
+      background: rgba(235, 216, 181, 0.95);
+    }
+    .sepia #page-footer {
+      background: #fbf0d9e8;
+      border-top-color: #d4bc91;
+    }
   </style>
 </head>
-<body data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}">
+<body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}">
   <header id="toolbar" aria-label="Reader controls">
     ${tocBtnHtml}
 
@@ -522,6 +683,7 @@ export function readerShell(
     <button type="button" data-action="font" id="font-btn" aria-label="Change font">${initialFontLabel}</button>
     <button type="button" data-action="spacing" id="spacing-btn" aria-label="Change line height">${initialSpacingLabel}</button>
     <button type="button" data-action="width" id="width-btn" aria-label="Change content width">${initialWidthLabel}</button>
+    <button type="button" data-action="mode" id="mode-btn" aria-label="Change reader mode">${initialModeLabel}</button>
 
     ${navHtml}
 
@@ -533,6 +695,22 @@ export function readerShell(
   ${sidebarHtml}
 
   <main id="content">${content.replace(/<style\b/gi, `<style nonce="${nonce}"`)}</main>
+
+  <button type="button" id="page-prev-arrow" class="page-nav-arrow" aria-label="Previous page (Shortcut: Left Arrow)" title="Previous page (Left Arrow)">‹</button>
+  <button type="button" id="page-next-arrow" class="page-nav-arrow" aria-label="Next page (Shortcut: Right Arrow)" title="Next page (Right Arrow)">›</button>
+
+  <footer id="page-footer" aria-label="Pagination footer">
+    <div class="page-footer-info">
+      ${navInfo?.bookTitle ? `<span class="page-footer-title" title="${escapeHtml(navInfo.bookTitle)}">${escapeHtml(navInfo.bookTitle)}</span>` : ''}
+    </div>
+    <div class="page-footer-center">
+      <span id="page-counter">Page 1 / 1</span>
+    </div>
+    <div class="page-footer-actions">
+      <button type="button" id="footer-prev-btn" aria-label="Previous page">‹ Prev</button>
+      <button type="button" id="footer-next-btn" aria-label="Next page">Next ›</button>
+    </div>
+  </footer>
 
   <div id="footnote-popover" class="footnote-popover" role="dialog" aria-modal="false" aria-label="Footnote" hidden>
     <div id="footnote-caret" class="footnote-caret"></div>
@@ -557,6 +735,142 @@ export function readerShell(
     const tocSidebar = document.getElementById('toc-sidebar');
     const tocBackdrop = document.getElementById('toc-backdrop');
     const tocSearch = document.getElementById('toc-search');
+    const modeBtn = document.getElementById('mode-btn');
+    const pagePrevArrow = document.getElementById('page-prev-arrow');
+    const pageNextArrow = document.getElementById('page-next-arrow');
+    const footerPrevBtn = document.getElementById('footer-prev-btn');
+    const footerNextBtn = document.getElementById('footer-next-btn');
+    const pageCounter = document.getElementById('page-counter');
+    const contentEl = document.getElementById('content') || document.querySelector('main');
+
+    let isPaginated = ${prefs.readerMode === 'paginated'};
+    let currentPage = 1;
+    let totalPages = 1;
+
+    function getColumnMetrics() {
+      if (!contentEl) return { width: 0, gap: 0, step: 0 };
+      const gap = parseFloat(window.getComputedStyle(contentEl).columnGap) || 64;
+      const width = contentEl.clientWidth;
+      return { width, gap, step: width + gap };
+    }
+
+    function computeTotalPages() {
+      if (!isPaginated || !contentEl) return 1;
+      const { gap, step } = getColumnMetrics();
+      if (step <= 0) return 1;
+      return Math.max(1, Math.round((contentEl.scrollWidth + gap) / step));
+    }
+
+    function updatePageControls() {
+      if (!isPaginated) return;
+      if (pageCounter) {
+        pageCounter.textContent = 'Page ' + currentPage + ' / ' + totalPages;
+      }
+      if (progressBar) {
+        const pct = totalPages > 1 ? ((currentPage - 1) / (totalPages - 1)) * 100 : 100;
+        progressBar.style.width = pct + '%';
+      }
+      const hasPrev = ${Boolean(navInfo?.hasPrev)};
+      const hasNext = ${Boolean(navInfo?.hasNext)};
+      const disablePrev = currentPage <= 1 && !hasPrev;
+      const disableNext = currentPage >= totalPages && !hasNext;
+      if (pagePrevArrow) pagePrevArrow.disabled = disablePrev;
+      if (footerPrevBtn) footerPrevBtn.disabled = disablePrev;
+      if (pageNextArrow) pageNextArrow.disabled = disableNext;
+      if (footerNextBtn) footerNextBtn.disabled = disableNext;
+    }
+
+    function renderPage(smooth = true) {
+      if (!isPaginated || !contentEl) return;
+      const { step } = getColumnMetrics();
+      const targetLeft = (currentPage - 1) * step;
+      if (smooth) {
+        contentEl.scrollTo({ left: targetLeft, behavior: 'smooth' });
+      } else {
+        contentEl.scrollLeft = targetLeft;
+      }
+      updatePageControls();
+      scheduleSaveReadingPosition();
+    }
+
+    function nextPage() {
+      if (!isPaginated) return;
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderPage(true);
+      } else {
+        const hasNext = ${Boolean(navInfo?.hasNext)};
+        if (hasNext) {
+          navigateToChapter({ type: 'nextChapter' });
+        }
+      }
+    }
+
+    function prevPage() {
+      if (!isPaginated) return;
+      if (currentPage > 1) {
+        currentPage--;
+        renderPage(true);
+      } else {
+        const hasPrev = ${Boolean(navInfo?.hasPrev)};
+        if (hasPrev) {
+          navigateToChapter({ type: 'prevChapter' });
+        }
+      }
+    }
+
+    function updatePagination(maintainRatio = false, prevRatio = 0) {
+      if (!isPaginated) return;
+      totalPages = computeTotalPages();
+      if (maintainRatio && totalPages > 1) {
+        currentPage = Math.max(1, Math.min(totalPages, Math.round(prevRatio * (totalPages - 1)) + 1));
+      } else {
+        currentPage = Math.max(1, Math.min(currentPage, totalPages));
+      }
+      renderPage(false);
+    }
+
+    function toggleMode(targetMode) {
+      const nextMode = targetMode || (isPaginated ? 'scroll' : 'paginated');
+      if (nextMode === 'paginated' && !isPaginated) {
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const ratio = docHeight > 0 ? scrollY / docHeight : 0;
+
+        isPaginated = true;
+        document.body.classList.add('paginated');
+        if (modeBtn) modeBtn.textContent = 'Mode: Paginated';
+
+        window.scrollTo(0, 0);
+        requestAnimationFrame(() => {
+          totalPages = computeTotalPages();
+          currentPage = Math.max(1, Math.min(totalPages, Math.round(ratio * (totalPages - 1)) + 1));
+          renderPage(false);
+          notifyPreferences();
+        });
+      } else if (nextMode === 'scroll' && isPaginated) {
+        const ratio = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0;
+
+        isPaginated = false;
+        document.body.classList.remove('paginated');
+        if (modeBtn) modeBtn.textContent = 'Mode: Scroll';
+        if (contentEl) contentEl.scrollLeft = 0;
+
+        requestAnimationFrame(() => {
+          const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+          if (docHeight > 0 && ratio > 0) {
+            window.scrollTo({ top: ratio * docHeight, behavior: 'instant' });
+          }
+          updateProgress();
+          notifyPreferences();
+        });
+      }
+    }
+
+    if (pagePrevArrow) pagePrevArrow.addEventListener('click', prevPage);
+    if (pageNextArrow) pageNextArrow.addEventListener('click', nextPage);
+    if (footerPrevBtn) footerPrevBtn.addEventListener('click', prevPage);
+    if (footerNextBtn) footerNextBtn.addEventListener('click', nextPage);
 
     function navigateToChapter(message) {
       if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
@@ -599,7 +913,8 @@ export function readerShell(
           fontSize: size,
           fontFamily: fonts[fontIndex].id,
           lineHeight: spacings[spacingIndex].id,
-          readerWidth: widths[widthIndex].id
+          readerWidth: widths[widthIndex].id,
+          readerMode: isPaginated ? 'paginated' : 'scroll'
         }
       });
     }
@@ -607,6 +922,9 @@ export function readerShell(
     const setSize = () => {
       document.documentElement.style.setProperty('--reader-size', size + 'px');
       if (fontSizeDisplay) fontSizeDisplay.textContent = size + 'px';
+      if (isPaginated) {
+        requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
+      }
       notifyPreferences();
     };
 
@@ -634,6 +952,10 @@ export function readerShell(
     }
 
     function updateProgress() {
+      if (isPaginated) {
+        updatePageControls();
+        return;
+      }
       const scrollY = window.scrollY || document.documentElement.scrollTop;
       const docHeight = document.documentElement.scrollHeight - window.innerHeight;
       const pct = docHeight > 0 ? Math.min(100, Math.max(0, (scrollY / docHeight) * 100)) : 0;
@@ -646,12 +968,37 @@ export function readerShell(
     function scheduleSaveReadingPosition() {
       if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
       scrollSaveTimer = setTimeout(() => {
+        if (isPaginated) {
+          const ratio = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0;
+          let anchorId = undefined;
+          if (contentEl) {
+            const { step, width } = getColumnMetrics();
+            const pageLeft = (currentPage - 1) * step;
+            const pageRight = pageLeft + width;
+            const candidates = contentEl.querySelectorAll('[id]');
+            for (let i = 0; i < candidates.length; i++) {
+              const el = candidates[i];
+              if (el.id === 'footnote-popover' || el.id === 'footnote-caret' || el.id === 'footnote-content') continue;
+              if (el.offsetLeft >= pageLeft && el.offsetLeft <= pageRight) {
+                anchorId = el.id;
+                break;
+              }
+            }
+          }
+          vscode.postMessage({
+            type: 'saveReadingPosition',
+            scrollRatio: ratio,
+            scrollY: 0,
+            anchorId: anchorId
+          });
+          return;
+        }
+
         const scrollY = window.scrollY || document.documentElement.scrollTop;
         const docHeight = document.documentElement.scrollHeight - window.innerHeight;
         const ratio = docHeight > 0 ? Math.min(1, Math.max(0, scrollY / docHeight)) : 0;
 
         let anchorId = undefined;
-        const contentEl = document.getElementById('content') || document.querySelector('main');
         if (contentEl) {
           const candidates = contentEl.querySelectorAll('[id]');
           for (let i = 0; i < candidates.length; i++) {
@@ -778,9 +1125,13 @@ export function readerShell(
 
       const lockScrollY = scrollY;
       const lockScrollX = scrollX;
+      const lockMainScrollLeft = contentEl ? contentEl.scrollLeft : 0;
       requestAnimationFrame(() => {
         if (window.scrollY !== lockScrollY || window.scrollX !== lockScrollX) {
           window.scrollTo(lockScrollX, lockScrollY);
+        }
+        if (isPaginated && contentEl && contentEl.scrollLeft !== lockMainScrollLeft) {
+          contentEl.scrollLeft = lockMainScrollLeft;
         }
       });
     }
@@ -817,6 +1168,9 @@ export function readerShell(
         const font = fonts[fontIndex];
         document.documentElement.style.setProperty('--reader-font', font.css);
         fontBtn.textContent = font.label;
+        if (isPaginated) {
+          requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
+        }
         notifyPreferences();
       }
       if (action === 'spacing') {
@@ -824,6 +1178,9 @@ export function readerShell(
         const sp = spacings[spacingIndex];
         document.documentElement.style.setProperty('--reader-line-height', sp.val);
         spacingBtn.textContent = sp.label;
+        if (isPaginated) {
+          requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
+        }
         notifyPreferences();
       }
       if (action === 'width') {
@@ -831,7 +1188,13 @@ export function readerShell(
         const w = widths[widthIndex];
         document.documentElement.style.setProperty('--reader-max-width', w.val);
         widthBtn.textContent = w.label;
+        if (isPaginated) {
+          requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
+        }
         notifyPreferences();
+      }
+      if (action === 'mode') {
+        toggleMode();
       }
       if (action === 'prev-chapter') {
         navigateToChapter({ type: 'prevChapter' });
@@ -882,6 +1245,15 @@ export function readerShell(
         }
 
         hidePopover();
+        if (isPaginated && target && contentEl) {
+          const { step } = getColumnMetrics();
+          if (step > 0) {
+            const colIndex = Math.floor(target.offsetLeft / step);
+            currentPage = Math.max(1, Math.min(totalPages, colIndex + 1));
+            renderPage(true);
+          }
+          return;
+        }
         scrollToFragment(id);
         return;
       }
@@ -909,6 +1281,18 @@ export function readerShell(
           toggleToc();
         }
       }
+      if (document.activeElement !== tocSearch && isPaginated) {
+        if (event.key === 'ArrowRight' || (event.key === ' ' && !event.shiftKey) || event.key === 'PageDown') {
+          event.preventDefault();
+          nextPage();
+          return;
+        }
+        if (event.key === 'ArrowLeft' || (event.key === ' ' && event.shiftKey) || event.key === 'PageUp') {
+          event.preventDefault();
+          prevPage();
+          return;
+        }
+      }
       if (event.key === '[' || (event.altKey && event.key === 'ArrowLeft')) {
         navigateToChapter({ type: 'prevChapter' });
       }
@@ -918,7 +1302,12 @@ export function readerShell(
     });
 
     // Close on window resize to avoid detached floating cards
-    window.addEventListener('resize', hidePopover);
+    window.addEventListener('resize', () => {
+      hidePopover();
+      if (isPaginated) {
+        updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0);
+      }
+    });
 
     const initial = document.body.dataset.fragment;
     const isResetToTop = document.body.dataset.resetToTop === 'true';
@@ -931,15 +1320,43 @@ export function readerShell(
     window.addEventListener('touchmove', () => { userScrolled = true; }, { passive: true, once: true });
 
     function forceTop() {
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-      if (progressBar) progressBar.style.width = '0%';
+      if (isPaginated) {
+        currentPage = 1;
+        renderPage(false);
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        if (progressBar) progressBar.style.width = '0%';
+      }
     }
 
     function restorePosition() {
       if (isResetToTop) {
         forceTop();
+        return;
+      }
+      if (isPaginated) {
+        totalPages = computeTotalPages();
+        if (initialAnchorId && contentEl) {
+          const target = document.getElementById(initialAnchorId);
+          if (target) {
+            const { step } = getColumnMetrics();
+            if (step > 0) {
+              const colIndex = Math.floor(target.offsetLeft / step);
+              currentPage = Math.max(1, Math.min(totalPages, colIndex + 1));
+              renderPage(false);
+              return;
+            }
+          }
+        }
+        if (initialRatio > 0 && totalPages > 1) {
+          currentPage = Math.max(1, Math.min(totalPages, Math.round(initialRatio * (totalPages - 1)) + 1));
+          renderPage(false);
+          return;
+        }
+        currentPage = 1;
+        renderPage(false);
         return;
       }
       if (userScrolled) return;
