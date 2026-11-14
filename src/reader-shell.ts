@@ -940,6 +940,8 @@ export function readerShell(
           return;
         }
       }
+      // If no initial fragment or saved position, explicitly reset to the top of the chapter!
+      window.scrollTo({ top: 0, behavior: 'instant' });
     }
 
     restorePosition();

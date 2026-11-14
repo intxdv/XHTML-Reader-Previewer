@@ -129,7 +129,7 @@ async function openPreview(
 
   let timer: NodeJS.Timeout | undefined;
 
-  const render = async (): Promise<void> => {
+  const render = async (resetToTop = false): Promise<void> => {
     try {
       const xhtml = await readSource(currentSource);
       const chapterDir = parentUri(currentSource);
@@ -164,7 +164,7 @@ async function openPreview(
 
       panel.title = getPanelTitle(currentSource, epubPackage, spineIndex);
       const preferences = stateManager?.getPreferences();
-      const location = stateManager?.getReadingLocation(currentSource.toString());
+      const location = resetToTop ? undefined : stateManager?.getReadingLocation(currentSource.toString());
       panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location);
       pendingFragment = undefined;
     } catch (error) {
@@ -196,7 +196,7 @@ async function openPreview(
         if (currentIndex > 0) {
           currentSource = epubPackage.spine[currentIndex - 1].uri;
           pendingFragment = undefined;
-          void render();
+          void render(true);
         }
       }
       return;
@@ -210,7 +210,7 @@ async function openPreview(
         if (currentIndex >= 0 && currentIndex < epubPackage.spine.length - 1) {
           currentSource = epubPackage.spine[currentIndex + 1].uri;
           pendingFragment = undefined;
-          void render();
+          void render(true);
         }
       }
       return;
@@ -233,9 +233,10 @@ async function openPreview(
     if (isOpenLinkMessage(message)) {
       const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
       if (target) {
+        const isDifferentChapter = target.source.path.toLowerCase() !== currentSource.path.toLowerCase();
         currentSource = target.source;
         pendingFragment = target.fragment;
-        void render();
+        void render(isDifferentChapter && !target.fragment);
       }
     }
   });
