@@ -73,4 +73,4 @@ npm run build
 
 ## 📄 License
 
-[MIT License](LICENSE) © 2026 intxdv
+[MIT License](LICENSE) © 2026 selvagant
