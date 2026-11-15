@@ -52,7 +52,7 @@ Download the standalone `.vsix` installer from the [Latest GitHub Release](https
 
 To install manually:
 ```bash
-code --install-extension xhtml-reader-previewer-0.0.1.vsix
+code --install-extension xhtml-reader-previewer-0.0.3.vsix
 ```
 *Or via VS Code UI: Extensions View ➔ Click `...` (More Actions) ➔ **Install from VSIX...** ➔ Select the downloaded file.*
 
