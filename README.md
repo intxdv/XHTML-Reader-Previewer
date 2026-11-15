@@ -2,7 +2,7 @@
   <img src="media/icon.png" width="128" height="128" alt="XHTML Reader Previewer Logo" />
   <h1>XHTML Reader Previewer</h1>
   <p>
-    <a href="https://marketplace.visualstudio.com/items?itemName=selvagant.xhtml-reader-previewer"><img src="https://vsmarketplacebadges.dev/version/selvagant.xhtml-reader-previewer.svg?style=flat-square" alt="Marketplace Version"></a>
+    <a href="https://marketplace.visualstudio.com/items?itemName=selvagant.xhtml-reader-previewer"><img src="https://img.shields.io/visual-studio-marketplace/v/selvagant.xhtml-reader-previewer?style=flat-square&label=Marketplace" alt="Marketplace Version"></a>
     <a href="https://open-vsx.org/extension/selvagant/xhtml-reader-previewer"><img src="https://img.shields.io/open-vsx/v/selvagant/xhtml-reader-previewer?style=flat-square&color=purple&label=Open%20VSX" alt="Open VSX Version"></a>
     <a href="https://github.com/intxdv/XHTML-Reader-Previewer/releases/latest"><img src="https://img.shields.io/github/v/release/intxdv/XHTML-Reader-Previewer?style=flat-square&color=emerald&label=GitHub%20Release" alt="GitHub Release"></a>
     <a href="https://github.com/intxdv/XHTML-Reader-Previewer/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/intxdv/XHTML-Reader-Previewer/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status"></a>
