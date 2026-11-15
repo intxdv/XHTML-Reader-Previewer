@@ -15,6 +15,24 @@ A modern, immersive, and feature-rich XHTML, HTML, and EPUB reader and live prev
 
 Whether you are authoring ebooks, inspecting XHTML documents, or reading `.epub` files directly inside your editor, **XHTML Reader Previewer** provides a distraction-free, beautifully crafted reading experience with dual reading modes, customizable typography, and instant footnote inspection.
 
+<p align="center">
+  <img src="resource/preview/Pics/01-preview-full-view.png" alt="XHTML Reader Previewer Split Preview" width="100%" />
+</p>
+
+---
+
+## 🎬 Live Preview & Demo
+
+Experience smooth reading, quick TOC search, and instant typography customization in action:
+
+<p align="center">
+  <img src="resource/preview/demo-preview.gif" alt="XHTML Reader Previewer Live Demo" width="100%" />
+</p>
+
+<p align="center">
+  <a href="resource/preview/demo.mp4">▶️ <b>Watch Full Video Walkthrough (1080p MP4)</b></a>
+</p>
+
 ---
 
 ## 📥 Installation
@@ -56,6 +74,16 @@ code --install-extension xhtml-reader-previewer-0.0.1.vsix
 - 💾 **Reading Location Persistence**: Automatically remembers your exact reading progress, scroll offset, and last opened chapter per book across sessions.
 - ⚡ **Ultra-Compact Immersive UI**: Floating, auto-collapsing toolbar with official Phosphor icons and ghost aesthetics.
 
+### 🖼️ Feature Highlights
+
+<div align="center">
+
+| Table of Contents (TOC) Sidebar | Typography & Theme Customization |
+| :---: | :---: |
+| <img src="resource/preview/Pics/02-toc-sidebar.png" alt="Table of Contents Sidebar" width="400" /> | <img src="resource/preview/Pics/03-reading-settings.png" alt="Reading Settings Popover" width="400" /> |
+
+</div>
+
 ---
 
 ## 🚀 Usage
@@ -64,6 +92,14 @@ code --install-extension xhtml-reader-previewer-0.0.1.vsix
 Right-click any `.xhtml`, `.html`, `.htm`, or `.epub` file in the Explorer, or click the preview button in the editor title bar:
 - **`XHTML Reader: Open Preview`**
 - **`XHTML Reader: Open Split Preview`**
+
+<div align="center">
+
+| Editor Title Bar Quick Action | Explorer Context Menu |
+| :---: | :---: |
+| <img src="resource/preview/Pics/04-editor-open-button.png" alt="Editor Title Bar Action Button" /> | <img src="resource/preview/Pics/05-explorer-context-menu.png" alt="Explorer Context Menu" /> |
+
+</div>
 
 ### Custom Editor Integration
 Double-click any `.epub` file in your workspace to open it immediately in the dedicated reader view.
