@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { sanitizeXhtml } from './xhtml';
+import { sanitizeXhtml, extractElementById } from './xhtml';
 import { readerShell, ReaderNavInfo } from './reader-shell';
 import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './epub';
 import { StateManager, ReaderPreferences } from './state-manager';
@@ -304,6 +304,51 @@ async function attachReaderToWebview(
       return;
     }
 
+    if (isRequestFootnoteMessage(message)) {
+      void (async () => {
+        try {
+          const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
+          if (!target || !target.fragment) {
+            void panel.webview.postMessage({
+              type: 'footnoteResponse',
+              requestId: message.requestId,
+              error: 'Missing target fragment'
+            });
+            return;
+          }
+
+          const fileBytes = await vscode.workspace.fs.readFile(target.source);
+          const rawXhtml = new TextDecoder('utf-8').decode(fileBytes);
+          const extractedHtml = extractElementById(rawXhtml, target.fragment);
+
+          if (!extractedHtml) {
+            void panel.webview.postMessage({
+              type: 'footnoteResponse',
+              requestId: message.requestId,
+              error: 'Anchor not found in target file'
+            });
+            return;
+          }
+
+          const targetDir = parentUri(target.source);
+          const rewritten = await rewriteResourceUris(extractedHtml, targetDir, panel.webview, epubPackage?.opfDir);
+
+          void panel.webview.postMessage({
+            type: 'footnoteResponse',
+            requestId: message.requestId,
+            html: rewritten
+          });
+        } catch (error) {
+          void panel.webview.postMessage({
+            type: 'footnoteResponse',
+            requestId: message.requestId,
+            error: String(error)
+          });
+        }
+      })();
+      return;
+    }
+
     if (isOpenLinkMessage(message)) {
       const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
       if (target) {
@@ -358,6 +403,18 @@ function isOpenLinkMessage(message: unknown): message is { type: 'openLink'; hre
     && message !== null
     && (message as { type?: unknown }).type === 'openLink'
     && typeof (message as { href?: unknown }).href === 'string';
+}
+
+function isRequestFootnoteMessage(message: unknown): message is {
+  type: 'requestFootnote';
+  href: string;
+  requestId: string;
+} {
+  return typeof message === 'object'
+    && message !== null
+    && (message as { type?: unknown }).type === 'requestFootnote'
+    && typeof (message as { href?: unknown }).href === 'string'
+    && typeof (message as { requestId?: unknown }).requestId === 'string';
 }
 
 function isSavePreferencesMessage(message: unknown): message is {

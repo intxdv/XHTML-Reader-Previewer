@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Sample EPUB - Cross-File Footnotes Demo</dc:title>
+    <dc:creator>XHTML Reader Previewer</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch_1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="notes" href="notes.xhtml" media-type="application/xhtml+xml"/>
+    <item id="style" href="style.css" media-type="text/css"/>
+    <item id="toc" href="toc.xhtml" properties="nav" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+    <itemref idref="notes"/>
+  </spine>
+</package>

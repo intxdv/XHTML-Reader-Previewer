@@ -140,3 +140,22 @@ test('readerShell contains ultra-compact single-row toolbar with settings popove
   assert.match(extensionBundle, /toolbar-hover-sensor/);
   assert.match(extensionBundle, /auxclick/); // Middle-click
 });
+
+test('readerShell contains heuristic cross-file footnote popover and asynchronous message communication', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify loading spinner & classes
+  assert.match(extensionBundle, /\.footnote-loading/);
+  assert.match(extensionBundle, /\.footnote-spinner/);
+  assert.match(extensionBundle, /footnoteSpin/);
+
+  // Verify cross-file request and response communication
+  assert.match(extensionBundle, /requestFootnote/);
+  assert.match(extensionBundle, /footnoteResponse/);
+  assert.match(extensionBundle, /isRequestFootnoteMessage/);
+
+  // Verify heuristic patterns in isFootnoteLink
+  assert.match(extensionBundle, /activeFootnoteRequestId/);
+  assert.match(extensionBundle, /positionPopover/);
+});

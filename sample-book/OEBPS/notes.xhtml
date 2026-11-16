@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <title>Endnotes</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+  <h1>Endnotes</h1>
+
+  <section class="footnotes" epub:type="footnotes">
+    <!-- Case 1: Standard EPUB 3 footnote -->
+    <aside id="fn1" epub:type="footnote">
+      <p>
+        1. <strong>[Standar EPUB 3]</strong> Catatan ini diekstrak langsung dari berkas terpisah (<code>notes.xhtml</code>) ke dalam floating popover tanpa memuat ulang chapter utama. <a href="ch_1.xhtml#ref1" role="doc-backlink">↩</a>
+      </p>
+    </aside>
+
+    <ol class="notes-list">
+      <!-- Case 2: Heuristic list item footnote -->
+      <li id="note-2">
+        <p>
+          2. <strong>[Deteksi Heuristik]</strong> Catatan ini membuktikan bahwa tautan berpola teks <code>[2]</code> tanpa atribut semantik formal tetap sukses dideteksi dan ditampilkan di popover. <a href="ch_1.xhtml#ref2" class="footnote-backref">↵</a>
+        </p>
+      </li>
+    </ol>
+
+    <!-- Case 3: Star symbol footnote -->
+    <div id="fn-star" class="footnote">
+      <p>
+        * <strong>[Simbol Bintang]</strong> Catatan tambahan untuk simbol bintang tunggal. Seluruh simbol pengembalian (<code>↑</code>) telah otomatis dibersihkan. <a href="ch_1.xhtml#ref-star">↑</a>
+      </p>
+    </div>
+
+    <!-- Case 4: Inline anchor inside paragraph -->
+    <p>
+      <a id="note_4" name="note_4"></a>
+      4. <strong>[Enclosing Paragraph]</strong> Catatan ini membuktikan bahwa jika atribut ID berada di dalam tag <code>&lt;a&gt;</code> pembuka, seluruh paragraf penjelas tetap berhasil diekstrak utuh. <a href="ch_1.xhtml#ref4">↩</a>
+    </p>
+  </section>
+</body>
+</html>

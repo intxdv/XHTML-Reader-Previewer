@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <title>Chapter 1: The Cross-File Discovery</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+  <h1>Chapter 1: The Cross-File Discovery</h1>
+
+  <p>
+    Di era modern penerbitan buku digital, berkas bab utama sering kali memisahkan catatan kaki ke dalam dokumen terpisah untuk menjaga keringkasan naskah utama<a href="notes.xhtml#fn1" id="ref1" epub:type="noteref" role="doc-noteref"><sup>[1]</sup></a>.
+  </p>
+
+  <p>
+    Sayangnya, banyak konversi EPUB lawas sama sekali tidak menyertakan atribut semantik formal. Sebagian besar hanya menggunakan teks berangka di dalam kurung siku biasa<a href="notes.xhtml#note-2" id="ref2">[2]</a> tanpa atribut <code>epub:type="noteref"</code>.
+  </p>
+
+  <p>
+    Bahkan, ada pula penerbit yang hanya menggunakan tanda bintang tunggal tanpa tag superscript<a href="notes.xhtml#fn-star" id="ref-star">*</a> untuk memberikan keterangan tambahan khusus pembaca.
+  </p>
+
+  <p>
+    Tantangan lainnya muncul ketika target catatan di berkas akhir dibungkus di dalam paragraf dengan tautan kosong pembuka<a href="notes.xhtml#note_4" id="ref4"><sup>4</sup></a>.
+  </p>
+
+  <p>
+    Sebagai pembanding, reader previewer kita juga tetap harus mampu menampilkan catatan lokal di halaman yang sama dengan mulus<a href="#local-fn" id="ref-local"><sup>[5]</sup></a> tanpa kendala.
+  </p>
+
+  <p>
+    Uji skenario batas (Edge Case): tautan catatan yang mengarah ke ID yang sengaja tidak ada di berkas tujuan<a href="notes.xhtml#anchor-sengaja-hilang" id="ref-broken"><sup>[99]</sup></a>.
+  </p>
+
+  <p>
+    Uji skenario batas lokal (Intra-file Edge Case): tautan catatan lokal yang mengarah ke ID yang tidak ada di bab ini<a href="#anchor-lokal-hilang" id="ref-local-broken"><sup>[100]</sup></a>.
+  </p>
+
+  <hr style="margin: 3rem 0; border: none; border-top: 1px solid #e5e7eb;"/>
+
+  <!-- Local Footnote Section -->
+  <section class="footnotes">
+    <aside id="local-fn" epub:type="footnote">
+      <p>5. <strong>Catatan Lokal:</strong> Ini adalah contoh catatan kaki yang berada di berkas yang sama (intra-file anchor). <a href="#ref-local" role="doc-backlink">↩</a></p>
+    </aside>
+  </section>
+</body>
+</html>

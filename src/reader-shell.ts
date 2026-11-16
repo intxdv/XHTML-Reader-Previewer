@@ -191,6 +191,20 @@ export function readerShell(
       transition: max-width 0.2s ease;
       will-change: transform;
     }
+    :root:not(.light) #content,
+    :root:not(.light) #content p,
+    :root:not(.light) #content li,
+    :root:not(.light) #content dd,
+    :root:not(.light) #content dt,
+    :root:not(.light) #content blockquote,
+    :root:not(.light) #content h1,
+    :root:not(.light) #content h2,
+    :root:not(.light) #content h3,
+    :root:not(.light) #content h4,
+    :root:not(.light) #content h5,
+    :root:not(.light) #content h6 {
+      color: var(--reader-fg);
+    }
     img, video {
       display: block;
       max-width: 100%;
@@ -546,13 +560,78 @@ export function readerShell(
     }
     .footnote-body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-height: 45vh;
+      max-height: min(260px, 45vh);
       overflow-y: auto;
       scrollbar-width: none !important;
       -ms-overflow-style: none !important;
     }
     .footnote-body p {
       margin: 0.25rem 0;
+    }
+    .footnote-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--muted-fg, #9ca3af);
+      font-size: 0.85rem;
+      padding: 0.2rem 0;
+    }
+    .footnote-spinner {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 2px solid var(--popover-border);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: footnoteSpin 0.6s linear infinite;
+    }
+    @keyframes footnoteSpin {
+      to { transform: rotate(360deg); }
+    }
+    .footnote-error-card {
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .footnote-error-header {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: #f59e0b;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+    }
+    .footnote-error-desc {
+      color: var(--popover-fg);
+      margin: 0.25rem 0 0.65rem;
+      opacity: 0.9;
+    }
+    .footnote-error-desc code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.88em;
+    }
+    .footnote-error-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+    }
+    .footnote-fallback-btn {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      padding: 0.3rem 0.65rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .footnote-fallback-btn:hover {
+      background: rgba(59, 130, 246, 0.28);
+      border-color: #60a5fa;
     }
 
     /* Settings Popover */
@@ -1357,6 +1436,9 @@ export function readerShell(
       if (!popover.hidden) {
         popover.hidden = true;
       }
+      activeFootnoteLink = null;
+      activeFootnoteHref = null;
+      activeFootnoteRequestId = null;
     }
 
     function toggleToc(open) {
@@ -1687,30 +1769,61 @@ export function readerShell(
       });
     }
 
+    let activeFootnoteLink = null;
+    let activeFootnoteHref = null;
+    let activeFootnoteRequestId = null;
+
     function isFootnoteLink(link, href) {
-      if (!href.startsWith('#')) return false;
+      if (!href) return false;
+      if (/^(?:https?:|mailto:|tel:|ftp:)/i.test(href)) return false;
+
+      const hashIndex = href.indexOf('#');
+      if (hashIndex === -1) return false;
+
+      const fragment = href.slice(hashIndex + 1);
+      if (!fragment) return false;
+
       const epubType = (link.getAttribute('epub:type') || '').toLowerCase();
       const role = (link.getAttribute('role') || '').toLowerCase();
       const className = (link.className || '').toLowerCase();
       const rel = (link.getAttribute('rel') || '').toLowerCase();
 
-      if (epubType.split(/\\s+/).includes('noteref')) return true;
-      if (role.split(/\\s+/).includes('doc-noteref')) return true;
-      if (rel.split(/\\s+/).includes('footnote')) return true;
-      if (/\\b(?:footnote|noteref|note-ref)\\b/i.test(className)) return true;
-      if (link.closest('sup, sub')) return true;
+      // 1. Semantic attributes
+      if (epubType.split(/\\s+/).some((t) => t.includes('noteref') || t.includes('footnote'))) return true;
+      if (role.split(/\\s+/).some((r) => r.includes('doc-noteref') || r.includes('doc-biblioref'))) return true;
+      if (rel.split(/\\s+/).some((r) => r.includes('footnote'))) return true;
+      if (/\\b(?:footnote|noteref|note-ref|endnote)\\b/i.test(className)) return true;
 
-      const id = decodeURIComponent(href.slice(1));
-      const target = document.getElementById(id);
-      if (target) {
-        const targetEpubType = (target.getAttribute('epub:type') || '').toLowerCase();
-        const targetRole = (target.getAttribute('role') || '').toLowerCase();
-        const targetClass = (target.className || '').toLowerCase();
-        const targetTag = target.tagName.toLowerCase();
-        if (targetTag === 'aside' || targetEpubType.includes('footnote') || targetRole.includes('doc-footnote') || /\\bfootnote\\b/i.test(targetClass)) {
-          return true;
+      // 2. Structural heuristics: sup, sub, or parent with footnote class
+      if (link.closest('sup, sub')) return true;
+      if (link.parentElement && /\\b(?:footnote|noteref|note-ref|fn)\\b/i.test(link.parentElement.className || '')) return true;
+
+      // 3. Text heuristics: [1], (1), 1, [a], *, †, ‡
+      const text = (link.textContent || '').trim();
+      if (/^\\[\\s*\\d+\\s*\\]$/.test(text) || /^\\(\\s*\\d+\\s*\\)$/.test(text) || /^\\d+$/.test(text)) return true;
+      if (/^\\[\\s*[a-zA-Z]\\s*\\]$/.test(text)) return true;
+      if (/^[*†‡§#]+$/.test(text)) return true;
+
+      // 4. Fragment identifier naming heuristics (e.g. #fn1, #note-1, #endnote_3, #n1)
+      const decodedFragment = decodeURIComponent(fragment).toLowerCase();
+      if (/^(?:fn|note|footnote|endnote|ftn|ref|n)[-_0-9]/i.test(decodedFragment)) return true;
+      if (/[-_](?:fn|note|footnote|endnote)[-_0-9]?$/i.test(decodedFragment)) return true;
+
+      // 5. If intra-file, inspect target element in DOM
+      if (hashIndex === 0) {
+        const id = decodeURIComponent(fragment);
+        const target = document.getElementById(id);
+        if (target) {
+          const targetEpubType = (target.getAttribute('epub:type') || '').toLowerCase();
+          const targetRole = (target.getAttribute('role') || '').toLowerCase();
+          const targetClass = (target.className || '').toLowerCase();
+          const targetTag = target.tagName.toLowerCase();
+          if (targetTag === 'aside' || targetEpubType.includes('footnote') || targetRole.includes('doc-footnote') || /\\bfootnote\\b/i.test(targetClass)) {
+            return true;
+          }
         }
       }
+
       return false;
     }
 
@@ -1731,14 +1844,8 @@ export function readerShell(
       return clone.innerHTML;
     }
 
-    function showFootnotePopover(link, target) {
-      if (link && typeof link.blur === 'function') {
-        link.blur();
-      }
-
-      noteContent.innerHTML = extractCleanFootnote(target);
-      popover.hidden = false;
-
+    function positionPopover(link) {
+      if (!link || popover.hidden) return;
       const linkRect = link.getBoundingClientRect();
       const popoverWidth = popover.offsetWidth;
       const popoverHeight = popover.offsetHeight;
@@ -1782,6 +1889,28 @@ export function readerShell(
           contentEl.scrollLeft = lockMainScrollLeft;
         }
       });
+    }
+
+    function showFootnotePopover(link, contentOrTarget) {
+      if (link && typeof link.blur === 'function') {
+        link.blur();
+      }
+
+      if (typeof contentOrTarget === 'string') {
+        noteContent.innerHTML = contentOrTarget;
+      } else if (contentOrTarget && contentOrTarget.nodeType) {
+        noteContent.innerHTML = extractCleanFootnote(contentOrTarget);
+      }
+
+      noteContent.querySelectorAll('a').forEach((el) => {
+        const h = el.getAttribute('href') || '';
+        if (h.startsWith('#')) {
+          el.replaceWith(document.createTextNode(el.textContent));
+        }
+      });
+
+      popover.hidden = false;
+      positionPopover(link);
     }
 
     // Toolbar actions
@@ -2029,17 +2158,54 @@ export function readerShell(
         return;
       }
 
+      // Check if it's a footnote link (intra-file or cross-file with fragment)
+      if (isFootnoteLink(link, href)) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const hashIndex = href.indexOf('#');
+        if (hashIndex === 0) {
+          const id = decodeURIComponent(href.slice(1));
+          const target = document.getElementById(id);
+          if (target) {
+            showFootnotePopover(link, target);
+            return;
+          }
+          // Intra-file footnote target anchor not found
+          showFootnotePopover(link,
+            '<div class="footnote-not-found">' +
+              '<div class="footnote-warning-header">' +
+                '<span class="warning-icon">⚠️</span>' +
+                '<strong>Target Not Found</strong>' +
+              '</div>' +
+              '<p class="footnote-warning-body">' +
+                'Anchor <code>#' + safeEscape(id) + '</code> tidak ditemukan di dalam bab ini.' +
+              '</p>' +
+            '</div>'
+          );
+          return;
+        }
+
+        // Cross-file footnote link
+        showFootnotePopover(link, '<div class="footnote-loading"><span class="footnote-spinner"></span><span>Loading note...</span></div>');
+        activeFootnoteLink = link;
+        activeFootnoteHref = href;
+        activeFootnoteRequestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+        vscode.postMessage({
+          type: 'requestFootnote',
+          href: href,
+          requestId: activeFootnoteRequestId
+        });
+        return;
+      }
+
       if (href.startsWith('#')) {
         event.preventDefault();
         event.stopPropagation();
 
         const id = decodeURIComponent(href.slice(1));
         const target = document.getElementById(id);
-
-        if (isFootnoteLink(link, href) && target) {
-          showFootnotePopover(link, target);
-          return;
-        }
 
         hidePopover();
         if (isPaginated && target && contentEl) {
@@ -2060,6 +2226,58 @@ export function readerShell(
         event.preventDefault();
         hidePopover();
         vscode.postMessage({ type: 'openLink', href });
+      }
+    });
+
+    function safeEscape(str) {
+      return String(str || '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c] || c));
+    }
+
+    // Fallback button click inside popover
+    if (popover) {
+      popover.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-action="open-fallback"]');
+        if (btn && btn.dataset.href) {
+          const href = btn.dataset.href;
+          hidePopover();
+          vscode.postMessage({ type: 'openLink', href });
+        }
+      });
+    }
+
+    // Message receiver from Extension Host
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+      if (!message || typeof message !== 'object') return;
+
+      if (message.type === 'footnoteResponse') {
+        if (message.requestId && message.requestId !== activeFootnoteRequestId) {
+          return;
+        }
+        if (message.html && activeFootnoteLink) {
+          showFootnotePopover(activeFootnoteLink, message.html);
+        } else if (activeFootnoteLink) {
+          const targetHref = activeFootnoteHref || '';
+          const hashIndex = targetHref.indexOf('#');
+          const fileName = hashIndex > 0 ? targetHref.slice(0, hashIndex).split('/').pop() : targetHref;
+          const fragment = hashIndex > 0 ? targetHref.slice(hashIndex) : '';
+
+          const errorHtml = '<div class="footnote-error-card">'
+            + '<div class="footnote-error-header">'
+            + '<span class="footnote-error-icon">⚠️</span>'
+            + '<span>Target Not Found</span>'
+            + '</div>'
+            + '<p class="footnote-error-desc">'
+            + 'Anchor <code>' + safeEscape(fragment) + '</code> tidak ditemukan di dalam berkas <code>' + safeEscape(fileName) + '</code>.'
+            + '</p>'
+            + '<div class="footnote-error-actions">'
+            + '<button type="button" class="footnote-fallback-btn" data-action="open-fallback" data-href="' + safeEscape(targetHref) + '">'
+            + 'Buka Berkas ' + safeEscape(fileName) + ' →'
+            + '</button>'
+            + '</div>'
+            + '</div>';
+          showFootnotePopover(activeFootnoteLink, errorHtml);
+        }
       }
     });
 
