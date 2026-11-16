@@ -11,7 +11,87 @@ export interface ReadingLocation {
   scrollRatio: number;
   scrollY: number;
   anchorId?: string;
+  isPaginated?: boolean;
   timestamp: number;
+}
+
+export interface HistoryLocation {
+  uri: string;
+  chapterTitle?: string;
+  scrollY: number;
+  scrollRatio: number;
+  anchorId?: string;
+  isPaginated?: boolean;
+}
+
+export class NavigationHistory {
+  private backStack: HistoryLocation[] = [];
+  private forwardStack: HistoryLocation[] = [];
+  private readonly maxDepth: number;
+
+  constructor(maxDepth = 50) {
+    this.maxDepth = maxDepth;
+  }
+
+  push(location: HistoryLocation): void {
+    this.backStack.push(location);
+    if (this.backStack.length > this.maxDepth) {
+      this.backStack.shift();
+    }
+    // When a new jump occurs, clear forward stack
+    this.forwardStack = [];
+  }
+
+  canGoBack(): boolean {
+    return this.backStack.length > 0;
+  }
+
+  canGoForward(): boolean {
+    return this.forwardStack.length > 0;
+  }
+
+  peekBack(): HistoryLocation | undefined {
+    return this.backStack.length > 0 ? this.backStack[this.backStack.length - 1] : undefined;
+  }
+
+  peekForward(): HistoryLocation | undefined {
+    return this.forwardStack.length > 0 ? this.forwardStack[this.forwardStack.length - 1] : undefined;
+  }
+
+  goBack(currentLocation: HistoryLocation): HistoryLocation | undefined {
+    const target = this.backStack.pop();
+    if (target) {
+      this.forwardStack.push(currentLocation);
+      if (this.forwardStack.length > this.maxDepth) {
+        this.forwardStack.shift();
+      }
+    }
+    return target;
+  }
+
+  goForward(currentLocation: HistoryLocation): HistoryLocation | undefined {
+    const target = this.forwardStack.pop();
+    if (target) {
+      this.backStack.push(currentLocation);
+      if (this.backStack.length > this.maxDepth) {
+        this.backStack.shift();
+      }
+    }
+    return target;
+  }
+
+  clear(): void {
+    this.backStack = [];
+    this.forwardStack = [];
+  }
+
+  getBackCount(): number {
+    return this.backStack.length;
+  }
+
+  getForwardCount(): number {
+    return this.forwardStack.length;
+  }
 }
 
 export interface MementoLike {

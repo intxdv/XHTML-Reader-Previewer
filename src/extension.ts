@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { sanitizeXhtml, extractElementById } from './xhtml';
 import { readerShell, ReaderNavInfo } from './reader-shell';
 import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './epub';
-import { StateManager, ReaderPreferences } from './state-manager';
+import { StateManager, ReaderPreferences, NavigationHistory, ReadingLocation } from './state-manager';
 import { EpubCacheManager, ArchiveSecurityError, ArchiveCorruptError } from './archive';
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm', '.epub']);
@@ -200,9 +200,10 @@ async function attachReaderToWebview(
 
   panel.webview.options = { enableScripts: true, localResourceRoots };
 
+  const navigationHistory = new NavigationHistory();
   let timer: NodeJS.Timeout | undefined;
 
-  const render = async (resetToTop = false, startAtBottom = false): Promise<void> => {
+  const render = async (resetToTop = false, startAtBottom = false, targetLocation?: ReadingLocation): Promise<void> => {
     try {
       const xhtml = await readSource(currentSource);
       const chapterDir = parentUri(currentSource);
@@ -225,6 +226,13 @@ async function attachReaderToWebview(
         };
       });
 
+      const peek = navigationHistory.peekBack();
+      const historyBackInfo = peek ? {
+        canGoBack: true,
+        chapterTitle: peek.chapterTitle,
+        scrollRatio: peek.scrollRatio
+      } : undefined;
+
       const navInfo: ReaderNavInfo = {
         hasPrev: spineIndex > 0,
         hasNext: spineIndex >= 0 && spineIndex < (epubPackage?.spine.length ?? 0) - 1,
@@ -232,12 +240,13 @@ async function attachReaderToWebview(
         creator: epubPackage?.creator,
         chapterIndex: spineIndex >= 0 ? spineIndex + 1 : undefined,
         totalChapters: epubPackage?.spine.length,
-        toc: tocWithActive
+        toc: tocWithActive,
+        historyBackInfo
       };
 
       panel.title = getPanelTitle(currentSource, epubPackage);
       const preferences = stateManager?.getPreferences();
-      const location = (resetToTop || startAtBottom) ? undefined : stateManager?.getReadingLocation(currentSource.toString());
+      const location = targetLocation || ((resetToTop || startAtBottom) ? undefined : stateManager?.getReadingLocation(currentSource.toString()));
       panel.webview.html = readerShell(content, currentSource, pendingFragment, panel.webview, navInfo, preferences, location, resetToTop, startAtBottom);
       pendingFragment = undefined;
     } catch (error) {
@@ -352,10 +361,71 @@ async function attachReaderToWebview(
     if (isOpenLinkMessage(message)) {
       const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
       if (target) {
+        const chapterTitle = getChapterTitle(currentSource, epubPackage);
+        const pos = message.currentPosition || stateManager?.getReadingLocation(currentSource.toString()) || { scrollY: 0, scrollRatio: 0 };
+        navigationHistory.push({
+          uri: currentSource.toString(),
+          chapterTitle,
+          scrollY: pos.scrollY,
+          scrollRatio: pos.scrollRatio,
+          isPaginated: Boolean(pos.isPaginated)
+        });
+
         currentSource = target.source;
         pendingFragment = target.fragment;
         void render(!target.fragment);
       }
+      return;
+    }
+
+    if (isHistoryBackMessage(message)) {
+      if (navigationHistory.canGoBack()) {
+        const chapterTitle = getChapterTitle(currentSource, epubPackage);
+        const pos = message.currentPosition || stateManager?.getReadingLocation(currentSource.toString()) || { scrollY: 0, scrollRatio: 0 };
+        const prev = navigationHistory.goBack({
+          uri: currentSource.toString(),
+          chapterTitle,
+          scrollY: pos.scrollY,
+          scrollRatio: pos.scrollRatio,
+          isPaginated: Boolean(pos.isPaginated)
+        });
+        if (prev) {
+          currentSource = vscode.Uri.parse(prev.uri);
+          pendingFragment = prev.anchorId;
+          void render(false, false, {
+            scrollY: prev.scrollY,
+            scrollRatio: prev.scrollRatio,
+            anchorId: prev.anchorId,
+            timestamp: Date.now()
+          });
+        }
+      }
+      return;
+    }
+
+    if (isHistoryForwardMessage(message)) {
+      if (navigationHistory.canGoForward()) {
+        const chapterTitle = getChapterTitle(currentSource, epubPackage);
+        const pos = message.currentPosition || stateManager?.getReadingLocation(currentSource.toString()) || { scrollY: 0, scrollRatio: 0 };
+        const next = navigationHistory.goForward({
+          uri: currentSource.toString(),
+          chapterTitle,
+          scrollY: pos.scrollY,
+          scrollRatio: pos.scrollRatio,
+          isPaginated: Boolean(pos.isPaginated)
+        });
+        if (next) {
+          currentSource = vscode.Uri.parse(next.uri);
+          pendingFragment = next.anchorId;
+          void render(false, false, {
+            scrollY: next.scrollY,
+            scrollRatio: next.scrollRatio,
+            anchorId: next.anchorId,
+            timestamp: Date.now()
+          });
+        }
+      }
+      return;
     }
   });
 
@@ -369,6 +439,7 @@ async function attachReaderToWebview(
     if (timer) {
       clearTimeout(timer);
     }
+    navigationHistory.clear();
     watcher.dispose();
     documentChange.dispose();
     messageSubscription.dispose();
@@ -390,6 +461,28 @@ function getPanelTitle(source: vscode.Uri, epub?: EpubPackage): string {
   return `${epub.title} — ${fileName}`;
 }
 
+function getChapterTitle(source: vscode.Uri, epub?: EpubPackage): string {
+  const fileName = source.path.slice(source.path.lastIndexOf('/') + 1);
+  if (epub) {
+    const currentPath = source.path.toLowerCase();
+    const tocMatch = epub.toc.find((item) => item.uri.path.toLowerCase() === currentPath);
+    if (tocMatch && tocMatch.label) {
+      return tocMatch.label;
+    }
+    const spineIdx = epub.spine.findIndex((item) => item.uri.path.toLowerCase() === currentPath);
+    if (spineIdx >= 0) {
+      return `Chapter ${spineIdx + 1}`;
+    }
+  }
+  return fileName;
+}
+
+export interface ReadingPositionPayload {
+  scrollY: number;
+  scrollRatio: number;
+  isPaginated?: boolean;
+}
+
 function isPrevChapterMessage(message: unknown): message is { type: 'prevChapter'; startAtBottom?: boolean } {
   return typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'prevChapter';
 }
@@ -398,11 +491,33 @@ function isNextChapterMessage(message: unknown): message is { type: 'nextChapter
   return typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'nextChapter';
 }
 
-function isOpenLinkMessage(message: unknown): message is { type: 'openLink'; href: string } {
+function isOpenLinkMessage(message: unknown): message is {
+  type: 'openLink';
+  href: string;
+  currentPosition?: ReadingPositionPayload;
+} {
   return typeof message === 'object'
     && message !== null
     && (message as { type?: unknown }).type === 'openLink'
     && typeof (message as { href?: unknown }).href === 'string';
+}
+
+function isHistoryBackMessage(message: unknown): message is {
+  type: 'historyBack';
+  currentPosition?: ReadingPositionPayload;
+} {
+  return typeof message === 'object'
+    && message !== null
+    && (message as { type?: unknown }).type === 'historyBack';
+}
+
+function isHistoryForwardMessage(message: unknown): message is {
+  type: 'historyForward';
+  currentPosition?: ReadingPositionPayload;
+} {
+  return typeof message === 'object'
+    && message !== null
+    && (message as { type?: unknown }).type === 'historyForward';
 }
 
 function isRequestFootnoteMessage(message: unknown): message is {

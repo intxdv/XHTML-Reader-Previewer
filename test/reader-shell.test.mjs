@@ -159,3 +159,24 @@ test('readerShell contains heuristic cross-file footnote popover and asynchronou
   assert.match(extensionBundle, /activeFootnoteRequestId/);
   assert.match(extensionBundle, /positionPopover/);
 });
+
+test('readerShell contains reading navigation history return pill and keyboard bindings', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify return pill elements & styles
+  assert.match(extensionBundle, /id=["']history-return-pill["']/);
+  assert.match(extensionBundle, /id=["']history-return-btn["']/);
+  assert.match(extensionBundle, /id=["']history-return-close["']/);
+  assert.match(extensionBundle, /history-return-pct/);
+  assert.match(extensionBundle, /pillSlideIn/);
+
+  // Verify message handlers and reading position payload
+  assert.match(extensionBundle, /isHistoryBackMessage/);
+  assert.match(extensionBundle, /isHistoryForwardMessage/);
+  assert.match(extensionBundle, /triggerHistoryBack/);
+  assert.match(extensionBundle, /getCurrentReadingPosition/);
+
+  // Verify keyboard navigation priority for Alt+Left
+  assert.match(extensionBundle, /data-can-go-back/);
+});
