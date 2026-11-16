@@ -43,6 +43,7 @@ Workspace untuk pengembangan **XHTML Reader Previewer** (Mode: **Mode 1: Native 
 | `/fast-polish` | `.agents/skills/fast-polish/SKILL.md` | Batch perbaikan visual / punch list dengan verifikasi ketat & auto-archive |
 | `/commit-now` | `.agents/skills/commit-now/SKILL.md` | Git commit atomic langsung untuk perubahan di luar task aktif |
 | `/run-pr` | `.agents/skills/run-pr/SKILL.md` | Susun PR Note, push remote, buat PR di GitHub, auto-merge squash, & sinkronisasi |
+| `/run-release` | `.agents/skills/run-release/SKILL.md` | Release version bump (SemVer), generate release notes, git tag v*, push & auto GitHub Release |
 | `/task-lifecycle-guide` | `.agents/skills/task-lifecycle-guide/SKILL.md` | Panduan terpadu siklus hidup task 5-tahap |
 
 ---
