@@ -588,6 +588,51 @@ export function readerShell(
     @keyframes footnoteSpin {
       to { transform: rotate(360deg); }
     }
+    .footnote-error-card {
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .footnote-error-header {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: #f59e0b;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+    }
+    .footnote-error-desc {
+      color: var(--popover-fg);
+      margin: 0.25rem 0 0.65rem;
+      opacity: 0.9;
+    }
+    .footnote-error-desc code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.88em;
+    }
+    .footnote-error-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+    }
+    .footnote-fallback-btn {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      padding: 0.3rem 0.65rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .footnote-fallback-btn:hover {
+      background: rgba(59, 130, 246, 0.28);
+      border-color: #60a5fa;
+    }
 
     /* Settings Popover */
     .settings-popover {
@@ -2183,6 +2228,22 @@ export function readerShell(
       }
     });
 
+    function safeEscape(str) {
+      return String(str || '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c] || c));
+    }
+
+    // Fallback button click inside popover
+    if (popover) {
+      popover.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-action="open-fallback"]');
+        if (btn && btn.dataset.href) {
+          const href = btn.dataset.href;
+          hidePopover();
+          vscode.postMessage({ type: 'openLink', href });
+        }
+      });
+    }
+
     // Message receiver from Extension Host
     window.addEventListener('message', (event) => {
       const message = event.data;
@@ -2194,11 +2255,27 @@ export function readerShell(
         }
         if (message.html && activeFootnoteLink) {
           showFootnotePopover(activeFootnoteLink, message.html);
-        } else {
-          hidePopover();
-          if (activeFootnoteHref) {
-            vscode.postMessage({ type: 'openLink', href: activeFootnoteHref });
-          }
+        } else if (activeFootnoteLink) {
+          const targetHref = activeFootnoteHref || '';
+          const hashIndex = targetHref.indexOf('#');
+          const fileName = hashIndex > 0 ? targetHref.slice(0, hashIndex).split('/').pop() : targetHref;
+          const fragment = hashIndex > 0 ? targetHref.slice(hashIndex) : '';
+
+          const errorHtml = '<div class="footnote-error-card">'
+            + '<div class="footnote-error-header">'
+            + '<span class="footnote-error-icon">⚠️</span>'
+            + '<span>Target Not Found</span>'
+            + '</div>'
+            + '<p class="footnote-error-desc">'
+            + 'Anchor <code>' + safeEscape(fragment) + '</code> tidak ditemukan di dalam berkas <code>' + safeEscape(fileName) + '</code>.'
+            + '</p>'
+            + '<div class="footnote-error-actions">'
+            + '<button type="button" class="footnote-fallback-btn" data-action="open-fallback" data-href="' + safeEscape(targetHref) + '">'
+            + 'Buka Berkas ' + safeEscape(fileName) + ' →'
+            + '</button>'
+            + '</div>'
+            + '</div>';
+          showFootnotePopover(activeFootnoteLink, errorHtml);
         }
       }
     });
