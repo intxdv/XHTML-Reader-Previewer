@@ -214,11 +214,31 @@ async function attachReaderToWebview(
         (item) => item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
       ) ?? -1;
 
-      const currentFileName = currentSource.path.slice(currentSource.path.lastIndexOf('/') + 1).toLowerCase();
+      const currentFileName = currentSource.path.slice(currentSource.path.lastIndexOf('/') + 1);
+      const isLinear = spineIndex >= 0 ? (epubPackage?.spine[spineIndex]?.linear !== false) : true;
+
+      const spineItems = epubPackage?.spine.map((item, idx) => {
+        const itemFileName = item.uri.path.slice(item.uri.path.lastIndexOf('/') + 1);
+        const isActive = item.uri.path.toLowerCase() === currentSource.path.toLowerCase();
+        const tocMatch = epubPackage.toc.find(
+          (t) => t.uri.path.toLowerCase() === item.uri.path.toLowerCase()
+        );
+        return {
+          index: idx + 1,
+          idref: item.idref,
+          href: item.href,
+          fileName: itemFileName,
+          linear: item.linear !== false,
+          active: isActive,
+          label: tocMatch?.label
+        };
+      });
+
+      const currentFileNameLower = currentFileName.toLowerCase();
       const tocWithActive = epubPackage?.toc.map((item) => {
         const itemFileName = item.href.split(/[?#]/, 1)[0].split('/').pop()?.toLowerCase();
         const isActive = item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
-          || (itemFileName && itemFileName === currentFileName);
+          || (itemFileName && itemFileName === currentFileNameLower);
         return {
           label: item.label,
           href: item.href,
@@ -240,6 +260,9 @@ async function attachReaderToWebview(
         creator: epubPackage?.creator,
         chapterIndex: spineIndex >= 0 ? spineIndex + 1 : undefined,
         totalChapters: epubPackage?.spine.length,
+        currentFileName,
+        isLinear,
+        spineItems,
         toc: tocWithActive,
         historyBackInfo
       };
