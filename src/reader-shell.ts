@@ -14,6 +14,16 @@ export interface HistoryBackInfo {
   scrollRatio?: number;
 }
 
+export interface ReaderSpineNavInfo {
+  index: number;
+  idref: string;
+  href: string;
+  fileName: string;
+  linear: boolean;
+  active: boolean;
+  label?: string;
+}
+
 export interface ReaderNavInfo {
   hasPrev?: boolean;
   hasNext?: boolean;
@@ -21,6 +31,9 @@ export interface ReaderNavInfo {
   creator?: string;
   chapterIndex?: number;
   totalChapters?: number;
+  currentFileName?: string;
+  isLinear?: boolean;
+  spineItems?: ReaderSpineNavInfo[];
   toc?: ReaderTocItem[];
   historyBackInfo?: HistoryBackInfo;
 }
@@ -70,6 +83,7 @@ const PHOSPHOR = {
   arrowsOutLineVertical: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" aria-hidden="true"><polyline points="104 32 128 8 152 32"/><line x1="128" y1="8" x2="128" y2="248"/><polyline points="152 224 128 248 104 224"/><line x1="40" y1="128" x2="216" y2="128"/></svg>`,
   slidersHorizontal: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" aria-hidden="true"><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="192" x2="216" y2="192"/><line x1="96" y1="32" x2="96" y2="96"/><line x1="160" y1="96" x2="160" y2="160"/><line x1="104" y1="160" x2="104" y2="224"/></svg>`,
   dotsThree: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M144,128a16,16,0,1,1-16-16A16,16,0,0,1,144,128ZM60,112a16,16,0,1,0,16,16A16,16,0,0,0,60,112Zm136,0a16,16,0,1,0,16,16A16,16,0,0,0,196,112Z"/></svg>`,
+  listNumbers: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M80,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H88A8,8,0,0,1,80,64Zm136,56H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Zm0,64H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16ZM44,56H36a8,8,0,0,0,0,16h8V96a8,8,0,0,0,16,0V48a8,8,0,0,0-8-8A8.09,8.09,0,0,0,44,56ZM52,148H44V140a8,8,0,0,0-16,0v16a8,8,0,0,0,8,8h16v8H28a8,8,0,0,0,0,16H52a8,8,0,0,0,8-8V156A8,8,0,0,0,52,148Zm0,48H36a8,8,0,0,0,0,16H52v8H36a8,8,0,0,0,0,16H52a8,8,0,0,0,8-8V204A8,8,0,0,0,52,196Z"/></svg>`,
   bookmarkSimple: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.76,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.76-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z"/></svg>`,
   arrowUUpLeft: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><polyline points="80 56 32 104 80 152"/><path d="M224,200a96,96,0,0,0-96-96H32"/></svg>`,
   x: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="14" height="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>`
@@ -112,16 +126,17 @@ export function readerShell(
 
   const hasNav = navInfo && typeof navInfo.totalChapters === 'number' && navInfo.totalChapters > 0;
   const hasToc = navInfo && Array.isArray(navInfo.toc) && navInfo.toc.length > 0;
+  const hasSpine = navInfo && Array.isArray(navInfo.spineItems) && navInfo.spineItems.length > 0;
 
-  const tocBtnHtml = hasToc
-    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents (Shortcut: T)" title="Table of Contents (Shortcut: T)">${PHOSPHOR.sidebarSimple} <span>Contents</span></button>`
+  const tocBtnHtml = (hasToc || hasSpine)
+    ? `<button type="button" data-action="toggle-toc" id="toc-btn" aria-label="Table of Contents &amp; Spine Order (Shortcut: T)" title="Table of Contents &amp; Spine Order (Shortcut: T)">${PHOSPHOR.sidebarSimple} <span>Contents</span></button>`
     : '';
 
   const navHtml = hasNav
     ? `<div class="toolbar-separator"></div>
     <div class="toolbar-group nav-group">
       <button type="button" data-action="prev-chapter" id="prev-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo.hasPrev ? '' : 'disabled'}>← Prev</button>
-      <span class="chapter-badge" title="${escapeHtml(navInfo.bookTitle || '')}">${navInfo.chapterIndex ?? 1} / ${navInfo.totalChapters}</span>
+      <span class="chapter-badge" title="${escapeHtml(navInfo.bookTitle || '')}${navInfo.currentFileName ? ` • File: ${escapeHtml(navInfo.currentFileName)}` : ''} • Spine: ${navInfo.chapterIndex ?? 1}/${navInfo.totalChapters}${navInfo.isLinear === false ? ' (Non-linear)' : ''}">Spine ${navInfo.chapterIndex ?? 1} / ${navInfo.totalChapters}${navInfo.currentFileName ? `<span class="chapter-badge-file"> • ${escapeHtml(navInfo.currentFileName)}</span>` : ''}${navInfo.isLinear === false ? ' <span class="badge-non-linear">Non-linear</span>' : ''}</span>
       <button type="button" data-action="next-chapter" id="next-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo.hasNext ? '' : 'disabled'}>Next →</button>
     </div>`
     : '';
@@ -135,22 +150,59 @@ export function readerShell(
     })
     .join('');
 
-  const sidebarHtml = hasToc
-    ? `<aside id="toc-sidebar" class="toc-sidebar" aria-label="Table of Contents">
+  const spineItemsHtml = (navInfo?.spineItems || [])
+    .map((item) => {
+      const activeClass = item.active ? ' active' : '';
+      const nonLinearBadge = !item.linear ? `<span class="spine-item-badge non-linear" title="Non-linear content (linear=&quot;no&quot;)">Non-linear</span>` : '';
+      const displayLabel = item.label ? escapeHtml(item.label) : escapeHtml(item.fileName);
+      const subLabel = item.label && item.label !== item.fileName ? `<span class="spine-item-file">${escapeHtml(item.fileName)}</span>` : '';
+
+      return `<a href="${escapeHtml(item.href)}" class="toc-item spine-item${activeClass}" data-href="${escapeHtml(item.href)}">
+        <span class="spine-item-idx">${item.index}</span>
+        <div class="spine-item-content">
+          <span class="toc-item-label">${displayLabel}</span>
+          ${subLabel}
+        </div>
+        ${nonLinearBadge}
+      </a>`;
+    })
+    .join('');
+
+  const sidebarHtml = (hasToc || hasSpine)
+    ? `<aside id="toc-sidebar" class="toc-sidebar" aria-label="Table of Contents and Reading Order">
       <div class="toc-header">
         <div class="toc-book-info">
-          <div class="toc-book-title">${escapeHtml(navInfo?.bookTitle || 'Table of Contents')}</div>
+          <div class="toc-book-title">${escapeHtml(navInfo?.bookTitle || 'Book Navigation')}</div>
           ${navInfo?.creator ? `<div class="toc-book-author">${escapeHtml(navInfo.creator)}</div>` : ''}
         </div>
-        <button type="button" data-action="close-toc" class="toc-close-btn" aria-label="Close Table of Contents">${PHOSPHOR.x}</button>
+        <button type="button" data-action="close-toc" class="toc-close-btn" aria-label="Close Navigation Sidebar">${PHOSPHOR.x}</button>
       </div>
+      ${hasSpine && hasToc ? `
+      <div class="sidebar-tabs" role="tablist">
+        <button type="button" role="tab" class="sidebar-tab-btn active" data-tab="toc" id="tab-btn-toc" aria-selected="true">
+          ${PHOSPHOR.sidebarSimple} <span>Contents</span>
+        </button>
+        <button type="button" role="tab" class="sidebar-tab-btn" data-tab="spine" id="tab-btn-spine" aria-selected="false">
+          ${PHOSPHOR.listNumbers} <span>Spine Order</span> <span class="tab-count">${navInfo?.spineItems?.length ?? 0}</span>
+        </button>
+      </div>
+      ` : ''}
       <div class="toc-search-wrap">
         <span class="toc-search-icon">${PHOSPHOR.magnifyingGlass}</span>
-        <input type="text" id="toc-search" placeholder="Filter chapters..." aria-label="Filter chapters" />
+        <input type="text" id="toc-search" placeholder="Filter chapters or files..." aria-label="Filter chapters or files" />
       </div>
-      <nav class="toc-list" id="toc-list">
-        ${tocItemsHtml}
-      </nav>
+      <div id="tab-pane-toc" class="sidebar-tab-pane active" role="tabpanel" aria-labelledby="tab-btn-toc">
+        <nav class="toc-list" id="toc-list">
+          ${tocItemsHtml}
+        </nav>
+      </div>
+      ${hasSpine ? `
+      <div id="tab-pane-spine" class="sidebar-tab-pane" role="tabpanel" aria-labelledby="tab-btn-spine" ${hasToc ? 'hidden' : ''}>
+        <nav class="toc-list spine-list" id="spine-list">
+          ${spineItemsHtml}
+        </nav>
+      </div>
+      ` : ''}
     </aside>
     <div id="toc-backdrop" class="toc-backdrop"></div>`
     : '';
@@ -512,6 +564,114 @@ export function readerShell(
       color: var(--toc-item-active-fg);
       border-left-color: var(--toc-item-active-fg);
       font-weight: 600;
+    }
+
+    /* Sidebar Tabs & Spine View */
+    .sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid rgba(156, 163, 175, 0.15);
+      background: rgba(0, 0, 0, 0.12);
+      padding: 0.25rem 0.75rem 0;
+      gap: 0.35rem;
+    }
+    .sidebar-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: transparent !important;
+      border: none !important;
+      border-bottom: 2px solid transparent !important;
+      border-radius: 4px 4px 0 0 !important;
+      color: var(--reader-fg) !important;
+      opacity: 0.65;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      padding: 0.45rem 0.65rem !important;
+      cursor: pointer;
+      transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .sidebar-tab-btn:hover {
+      opacity: 0.95;
+      background: rgba(255, 255, 255, 0.04) !important;
+    }
+    .sidebar-tab-btn.active {
+      opacity: 1;
+      border-bottom-color: var(--reader-link) !important;
+      color: var(--reader-link) !important;
+      font-weight: 600;
+    }
+    .sidebar-tab-btn .tab-count {
+      font-size: 0.72rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 9999px;
+      background: rgba(156, 163, 175, 0.18);
+      font-variant-numeric: tabular-nums;
+    }
+    .sidebar-tab-pane {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .sidebar-tab-pane.active {
+      display: block;
+    }
+    .spine-item {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+    .spine-item-idx {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.4rem;
+      height: 1.4rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 4px;
+      background: rgba(156, 163, 175, 0.14);
+      color: var(--reader-fg);
+      opacity: 0.85;
+      flex-shrink: 0;
+    }
+    .spine-item.active .spine-item-idx {
+      background: var(--toc-item-active-fg);
+      color: #ffffff;
+      opacity: 1;
+    }
+    .spine-item-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+    .spine-item-file {
+      font-size: 0.72rem;
+      color: rgba(156, 163, 175, 0.8);
+      font-family: monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .spine-item-badge.non-linear,
+    .badge-non-linear {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      background: rgba(239, 68, 68, 0.18);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      flex-shrink: 0;
+    }
+    .chapter-badge-file {
+      font-size: 0.75rem;
+      opacity: 0.75;
+      font-weight: 400;
     }
 
     /* Anchored Footnote Popover */
@@ -1082,6 +1242,32 @@ export function readerShell(
       background: #1d4ed8;
       color: #ffffff;
     }
+    .light .sidebar-tabs {
+      background: rgba(0, 0, 0, 0.04);
+      border-bottom-color: rgba(0, 0, 0, 0.08);
+    }
+    .light .sidebar-tab-btn {
+      color: #334155 !important;
+    }
+    .light .sidebar-tab-btn:hover {
+      background: rgba(0, 0, 0, 0.04) !important;
+    }
+    .light .sidebar-tab-btn.active {
+      color: var(--reader-link) !important;
+    }
+    .light .spine-item-idx {
+      background: rgba(0, 0, 0, 0.08);
+      color: #172033;
+    }
+    .light .spine-item-file {
+      color: #64748b;
+    }
+    .light .spine-item-badge.non-linear,
+    .light .badge-non-linear {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
 
     /* Sepia Theme */
     .sepia {
@@ -1149,6 +1335,37 @@ export function readerShell(
       background: #92400e;
       color: #ffffff;
     }
+    .sepia .sidebar-tabs {
+      background: #ebd8b5;
+      border-bottom-color: #d4bc91;
+    }
+    .sepia .sidebar-tab-btn {
+      color: #5f4b32 !important;
+    }
+    .sepia .sidebar-tab-btn:hover {
+      background: rgba(95, 75, 50, 0.06) !important;
+    }
+    .sepia .sidebar-tab-btn.active {
+      color: #92400e !important;
+      border-bottom-color: #92400e !important;
+    }
+    .sepia .spine-item-idx {
+      background: rgba(95, 75, 50, 0.12);
+      color: #5f4b32;
+    }
+    .sepia .spine-item.active .spine-item-idx {
+      background: #92400e;
+      color: #ffffff;
+    }
+    .sepia .spine-item-file {
+      color: #8c7355;
+    }
+    .sepia .spine-item-badge.non-linear,
+    .sepia .badge-non-linear {
+      background: #fde8e8;
+      color: #991b1b;
+      border-color: #f8b4b4;
+    }
   </style>
 </head>
 <body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-start-at-bottom="${startAtBottom ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}" data-can-go-back="${Boolean(navInfo?.historyBackInfo?.canGoBack)}">
@@ -1163,7 +1380,7 @@ export function readerShell(
       ${navInfo?.chapterIndex ? `
         <div class="chapter-nav-inline">
           <button type="button" data-action="prev-chapter" id="prev-btn" class="nav-arrow-btn" title="Previous chapter (Shortcut: [ or Alt+Left)" ${navInfo?.hasPrev ? '' : 'disabled'} aria-label="Previous chapter">${PHOSPHOR.caretLeft}</button>
-          <span class="chapter-badge" title="${escapeHtml(navInfo?.bookTitle || '')}">${navInfo.chapterIndex} / ${navInfo.totalChapters}</span>
+          <span class="chapter-badge" title="${escapeHtml(navInfo?.bookTitle || '')}${navInfo?.currentFileName ? ` • File: ${escapeHtml(navInfo.currentFileName)}` : ''} • Spine: ${navInfo.chapterIndex}/${navInfo.totalChapters}${navInfo.isLinear === false ? ' (Non-linear)' : ''}">Spine ${navInfo.chapterIndex} / ${navInfo.totalChapters}${navInfo?.currentFileName ? `<span class="chapter-badge-file"> • ${escapeHtml(navInfo.currentFileName)}</span>` : ''}${navInfo.isLinear === false ? ' <span class="badge-non-linear">Non-linear</span>' : ''}</span>
           <button type="button" data-action="next-chapter" id="next-btn" class="nav-arrow-btn" title="Next chapter (Shortcut: ] or Alt+Right)" ${navInfo?.hasNext ? '' : 'disabled'} aria-label="Next chapter">${PHOSPHOR.caretRight}</button>
         </div>
       ` : ''}
@@ -1572,8 +1789,8 @@ export function readerShell(
       if (isOpen) {
         tocSidebar.classList.add('open');
         tocBackdrop?.classList.add('open');
-        // Scroll active item into view
-        const activeItem = tocSidebar.querySelector('.toc-item.active');
+        // Scroll active item into view on currently active tab pane
+        const activeItem = tocSidebar.querySelector('.sidebar-tab-pane.active .toc-item.active') || tocSidebar.querySelector('.toc-item.active');
         activeItem?.scrollIntoView({ block: 'center' });
       } else {
         tocSidebar.classList.remove('open');
@@ -1893,6 +2110,42 @@ export function readerShell(
         });
       });
     }
+
+    // Sidebar tabs switcher (Contents vs Spine Order)
+    const sidebarTabBtns = document.querySelectorAll('.sidebar-tab-btn');
+    const tabPanes = {
+      toc: document.getElementById('tab-pane-toc'),
+      spine: document.getElementById('tab-pane-spine')
+    };
+
+    sidebarTabBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const targetTab = btn.getAttribute('data-tab');
+        sidebarTabBtns.forEach((b) => {
+          const isActive = b === btn;
+          b.classList.toggle('active', isActive);
+          b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        if (tabPanes.toc && tabPanes.spine) {
+          if (targetTab === 'spine') {
+            tabPanes.toc.hidden = true;
+            tabPanes.toc.classList.remove('active');
+            tabPanes.spine.hidden = false;
+            tabPanes.spine.classList.add('active');
+            const activeSpine = tabPanes.spine.querySelector('.spine-item.active');
+            activeSpine?.scrollIntoView({ block: 'center' });
+          } else {
+            tabPanes.spine.hidden = true;
+            tabPanes.spine.classList.remove('active');
+            tabPanes.toc.hidden = false;
+            tabPanes.toc.classList.add('active');
+            const activeToc = tabPanes.toc.querySelector('.toc-item.active');
+            activeToc?.scrollIntoView({ block: 'center' });
+          }
+        }
+      });
+    });
 
     let activeFootnoteLink = null;
     let activeFootnoteHref = null;

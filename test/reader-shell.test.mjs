@@ -180,3 +180,31 @@ test('readerShell contains reading navigation history return pill and keyboard b
   // Verify keyboard navigation priority for Alt+Left
   assert.match(extensionBundle, /data-can-go-back/);
 });
+
+test('readerShell contains spine order inspector tab and toolbar spine metadata', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  // Verify sidebar tab switcher elements
+  assert.match(extensionBundle, /class=["']sidebar-tabs["']/);
+  assert.match(extensionBundle, /id=["']tab-btn-toc["']/);
+  assert.match(extensionBundle, /id=["']tab-btn-spine["']/);
+  assert.match(extensionBundle, /id=["']tab-pane-toc["']/);
+  assert.match(extensionBundle, /id=["']tab-pane-spine["']/);
+
+  // Verify spine order list items and linear badge
+  assert.match(extensionBundle, /class=["']toc-item spine-item/);
+  assert.match(extensionBundle, /spine-item-idx/);
+  assert.match(extensionBundle, /spine-item-file/);
+  assert.match(extensionBundle, /spine-item-badge non-linear/);
+
+  // Verify toolbar spine metadata & non-linear indicator
+  assert.match(extensionBundle, /chapter-badge-file/);
+  assert.match(extensionBundle, /badge-non-linear/);
+
+  // Verify client-side tab switching script logic
+  assert.match(extensionBundle, /sidebar-tab-btn/);
+  assert.match(extensionBundle, /tabPanes\.spine/);
+  assert.match(extensionBundle, /tabPanes\.toc/);
+});
+
