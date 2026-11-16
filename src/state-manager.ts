@@ -11,6 +11,7 @@ export interface ReadingLocation {
   scrollRatio: number;
   scrollY: number;
   anchorId?: string;
+  isPaginated?: boolean;
   timestamp: number;
 }
 

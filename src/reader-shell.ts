@@ -8,6 +8,12 @@ export interface ReaderTocItem {
   active?: boolean;
 }
 
+export interface HistoryBackInfo {
+  canGoBack: boolean;
+  chapterTitle?: string;
+  scrollRatio?: number;
+}
+
 export interface ReaderNavInfo {
   hasPrev?: boolean;
   hasNext?: boolean;
@@ -16,6 +22,7 @@ export interface ReaderNavInfo {
   chapterIndex?: number;
   totalChapters?: number;
   toc?: ReaderTocItem[];
+  historyBackInfo?: HistoryBackInfo;
 }
 
 const fontCssMap: Record<string, string> = {
@@ -64,6 +71,7 @@ const PHOSPHOR = {
   slidersHorizontal: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" aria-hidden="true"><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="192" x2="216" y2="192"/><line x1="96" y1="32" x2="96" y2="96"/><line x1="160" y1="96" x2="160" y2="160"/><line x1="104" y1="160" x2="104" y2="224"/></svg>`,
   dotsThree: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M144,128a16,16,0,1,1-16-16A16,16,0,0,1,144,128ZM60,112a16,16,0,1,0,16,16A16,16,0,0,0,60,112Zm136,0a16,16,0,1,0,16,16A16,16,0,0,0,196,112Z"/></svg>`,
   bookmarkSimple: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.76,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.76-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z"/></svg>`,
+  arrowUUpLeft: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><polyline points="80 56 32 104 80 152"/><path d="M224,200a96,96,0,0,0-96-96H32"/></svg>`,
   x: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="14" height="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>`
 };
 
@@ -904,6 +912,110 @@ export function readerShell(
       display: none !important;
     }
 
+    /* Floating Return to Reading Position Pill */
+    .history-return-pill {
+      position: fixed;
+      bottom: 2rem;
+      left: 2rem;
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+      background: var(--popover-bg);
+      color: var(--popover-fg);
+      border: 1px solid var(--popover-border);
+      border-radius: 9999px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, visibility 0.2s;
+      animation: pillSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      user-select: none;
+    }
+    .history-return-pill.minimized {
+      opacity: 0.45;
+      transform: translateY(6px) scale(0.96);
+    }
+    .history-return-pill.minimized:hover {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .history-return-pill.hidden {
+      display: none !important;
+    }
+    @keyframes pillSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    .history-return-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: transparent !important;
+      border: none !important;
+      color: inherit !important;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 0.25rem 0.35rem;
+      line-height: 1.2;
+    }
+    .history-return-btn:hover {
+      color: var(--reader-link) !important;
+    }
+    .history-return-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--reader-link);
+    }
+    .history-return-text {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      max-width: 280px;
+    }
+    .history-return-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .history-return-pct {
+      font-size: 0.75rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 9999px;
+      background: rgba(156, 163, 175, 0.15);
+      color: var(--popover-fg);
+      font-variant-numeric: tabular-nums;
+    }
+    .history-return-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent !important;
+      border: none !important;
+      color: #94a3b8 !important;
+      cursor: pointer;
+      padding: 0.2rem;
+      border-radius: 50%;
+      font-size: 1rem;
+      line-height: 1;
+      width: 1.35rem;
+      height: 1.35rem;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .history-return-close:hover {
+      background: rgba(156, 163, 175, 0.2) !important;
+      color: var(--popover-fg) !important;
+    }
+
     /* Light Theme */
     .light {
       --reader-bg: #f8fafc;
@@ -1039,7 +1151,7 @@ export function readerShell(
     }
   </style>
 </head>
-<body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-start-at-bottom="${startAtBottom ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}">
+<body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-start-at-bottom="${startAtBottom ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}" data-can-go-back="${Boolean(navInfo?.historyBackInfo?.canGoBack)}">
   <div id="toolbar-hover-sensor" class="toolbar-hover-sensor" aria-hidden="true"></div>
 
   <header id="toolbar" aria-label="Reader controls">
@@ -1157,6 +1269,19 @@ export function readerShell(
     <div id="footnote-caret" class="footnote-caret"></div>
     <div id="footnote-content" class="footnote-body"></div>
   </div>
+
+  ${navInfo?.historyBackInfo?.canGoBack ? `
+  <aside id="history-return-pill" class="history-return-pill" role="complementary" aria-label="Return to previous reading position">
+    <button type="button" class="history-return-btn" id="history-return-btn" title="Return to ${escapeHtml(navInfo.historyBackInfo.chapterTitle || 'previous position')}${navInfo.historyBackInfo.scrollRatio !== undefined ? ` (${Math.round(navInfo.historyBackInfo.scrollRatio * 100)}%)` : ''} (Shortcut: Alt+Left)">
+      <span class="history-return-icon">${PHOSPHOR.arrowUUpLeft}</span>
+      <span class="history-return-text">
+        <span class="history-return-title">Kembali ke ${escapeHtml(navInfo.historyBackInfo.chapterTitle || 'posisi sebelumnya')}</span>
+        ${navInfo.historyBackInfo.scrollRatio !== undefined ? `<span class="history-return-pct">${Math.round(navInfo.historyBackInfo.scrollRatio * 100)}%</span>` : ''}
+      </span>
+    </button>
+    <button type="button" class="history-return-close" id="history-return-close" title="Tutup pemberitahuan" aria-label="Dismiss return cue">&times;</button>
+  </aside>
+  ` : ''}
 
   <script nonce="${nonce}">
     if ('scrollRestoration' in history) {
@@ -2137,6 +2262,30 @@ export function readerShell(
       }
     });
 
+    function getCurrentReadingPosition() {
+      if (isPaginated) {
+        const ratio = totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0;
+        return {
+          scrollY: currentPage,
+          scrollRatio: ratio,
+          isPaginated: true
+        };
+      }
+      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const ratio = docHeight > 0 ? Math.min(1, Math.max(0, scrollY / docHeight)) : 0;
+      return {
+        scrollY: Math.round(scrollY),
+        scrollRatio: ratio,
+        isPaginated: false
+      };
+    }
+
+    function triggerHistoryBack() {
+      const pos = getCurrentReadingPosition();
+      vscode.postMessage({ type: 'historyBack', currentPosition: pos });
+    }
+
     // Link handling & footnote interception
     document.addEventListener('click', (event) => {
       const link = event.target.closest('a[href]');
@@ -2154,7 +2303,8 @@ export function readerShell(
       if (link.classList.contains('toc-item')) {
         event.preventDefault();
         toggleToc(false);
-        navigateToChapter({ type: 'openLink', href });
+        const pos = getCurrentReadingPosition();
+        navigateToChapter({ type: 'openLink', href: href, currentPosition: pos });
         return;
       }
 
@@ -2225,7 +2375,8 @@ export function readerShell(
       if (!/^(?:[a-z][a-z0-9+.-]*:|\\/\\/)/i.test(href)) {
         event.preventDefault();
         hidePopover();
-        vscode.postMessage({ type: 'openLink', href });
+        const pos = getCurrentReadingPosition();
+        vscode.postMessage({ type: 'openLink', href: href, currentPosition: pos });
       }
     });
 
@@ -2240,7 +2391,8 @@ export function readerShell(
         if (btn && btn.dataset.href) {
           const href = btn.dataset.href;
           hidePopover();
-          vscode.postMessage({ type: 'openLink', href });
+          const pos = getCurrentReadingPosition();
+          vscode.postMessage({ type: 'openLink', href: href, currentPosition: pos });
         }
       });
     }
@@ -2322,13 +2474,60 @@ export function readerShell(
           return;
         }
       }
-      if (event.key === '[' || (event.altKey && event.key === 'ArrowLeft')) {
+      const canGoBack = document.body.dataset.canGoBack === 'true';
+      if (event.altKey && event.key === 'ArrowLeft') {
+        event.preventDefault();
+        if (canGoBack) {
+          triggerHistoryBack();
+        } else {
+          navigateToChapter({ type: 'prevChapter' });
+        }
+        return;
+      }
+      if (event.key === 'Backspace' && document.activeElement && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        if (canGoBack) {
+          event.preventDefault();
+          triggerHistoryBack();
+          return;
+        }
+      }
+      if (event.key === '[') {
         navigateToChapter({ type: 'prevChapter' });
       }
       if (event.key === ']' || (event.altKey && event.key === 'ArrowRight')) {
         navigateToChapter({ type: 'nextChapter' });
       }
     });
+
+    // Return to Previous Reading Position Pill listeners
+    const returnPill = document.getElementById('history-return-pill');
+    const returnBtn = document.getElementById('history-return-btn');
+    const returnClose = document.getElementById('history-return-close');
+
+    if (returnBtn) {
+      returnBtn.addEventListener('click', () => {
+        triggerHistoryBack();
+      });
+    }
+
+    if (returnClose) {
+      returnClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (returnPill) returnPill.classList.add('hidden');
+      });
+    }
+
+    let lastScrollY = window.scrollY || 0;
+    let accumulatedScroll = 0;
+    window.addEventListener('scroll', () => {
+      if (!returnPill || returnPill.classList.contains('hidden')) return;
+      const currentScroll = window.scrollY || 0;
+      accumulatedScroll += Math.abs(currentScroll - lastScrollY);
+      lastScrollY = currentScroll;
+      if (accumulatedScroll > 350) {
+        returnPill.classList.add('minimized');
+      }
+    }, { passive: true });
 
     // Close on window resize to avoid detached floating cards
     window.addEventListener('resize', () => {
