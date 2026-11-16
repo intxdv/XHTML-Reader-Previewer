@@ -60,6 +60,57 @@ test('parseOpfXml extracts title, creator, manifest, and spine in sequence', asy
   assert.equal(parsed.spine[2].idref, 'ch2');
 });
 
+test('parseOpfXml strictly respects spine itemref order and linear attribute over manifest declaration order', async () => {
+  const epub = await import('../dist/epub.js');
+  const opfXml = `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Unordered Spine Demo</dc:title>
+  </metadata>
+  <manifest>
+    <item id="a-ch1" href="a_chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="b-ch2" href="b_chapter2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="cover" href="z_cover.xhtml" media-type="application/xhtml+xml"/>
+    <item id="prologue" href="m_prologue.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="cover" linear="no"/>
+    <itemref idref="prologue"/>
+    <itemref idref="b-ch2"/>
+    <itemref idref="a-ch1"/>
+  </spine>
+</package>`;
+
+  const mockOpfUri = {
+    path: '/project/OEBPS/content.opf',
+    with(change) { return { ...this, ...change }; }
+  };
+  const mockRootUri = {
+    path: '/project',
+    with(change) { return { ...this, ...change }; }
+  };
+
+  const parsed = epub.parseOpfXml(opfXml, mockOpfUri, mockRootUri);
+  assert.equal(parsed.spine.length, 4);
+
+  // Verify exact order in spine: cover (z_cover) -> prologue (m_prologue) -> ch2 (b_chapter2) -> ch1 (a_chapter1)
+  assert.equal(parsed.spine[0].idref, 'cover');
+  assert.equal(parsed.spine[0].href, 'z_cover.xhtml');
+  assert.equal(parsed.spine[0].linear, false); // linear="no"
+
+  assert.equal(parsed.spine[1].idref, 'prologue');
+  assert.equal(parsed.spine[1].href, 'm_prologue.xhtml');
+  assert.equal(parsed.spine[1].linear, true);
+
+  assert.equal(parsed.spine[2].idref, 'b-ch2');
+  assert.equal(parsed.spine[2].href, 'b_chapter2.xhtml');
+  assert.equal(parsed.spine[2].linear, true);
+
+  assert.equal(parsed.spine[3].idref, 'a-ch1');
+  assert.equal(parsed.spine[3].href, 'a_chapter1.xhtml');
+  assert.equal(parsed.spine[3].linear, true);
+});
+
 test('parseNavHtml extracts TOC items from EPUB 3 Navigation document', async () => {
   const epub = await import('../dist/epub.js');
   const navHtml = `<!DOCTYPE html>
