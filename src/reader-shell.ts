@@ -2171,17 +2171,18 @@ export function readerShell(
             showFootnotePopover(link, target);
             return;
           }
-          hidePopover();
-          if (isPaginated && target && contentEl) {
-            const { step } = getColumnMetrics();
-            if (step > 0) {
-              const colIndex = Math.floor(target.offsetLeft / step);
-              currentPage = Math.max(1, Math.min(totalPages, colIndex + 1));
-              renderPage(true);
-            }
-            return;
-          }
-          scrollToFragment(id);
+          // Intra-file footnote target anchor not found
+          showFootnotePopover(link,
+            '<div class="footnote-not-found">' +
+              '<div class="footnote-warning-header">' +
+                '<span class="warning-icon">⚠️</span>' +
+                '<strong>Target Not Found</strong>' +
+              '</div>' +
+              '<p class="footnote-warning-body">' +
+                'Anchor <code>#' + safeEscape(id) + '</code> tidak ditemukan di dalam bab ini.' +
+              '</p>' +
+            '</div>'
+          );
           return;
         }
 
