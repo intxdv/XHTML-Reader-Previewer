@@ -2,7 +2,7 @@
   "name": "xhtml-reader-previewer",
   "displayName": "XHTML Reader Previewer",
   "description": "Live XHTML and EPUB reader preview for VS Code-compatible IDEs.",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "icon": "media/icon.png",
   "publisher": "selvagant",
   "author": "selvagant",
