@@ -35,16 +35,15 @@ Workspace untuk pengembangan **XHTML Reader Previewer** (Mode: **Mode 1: Native 
 - **Notes**: `note-YYYY-MM-DD.md`
 - **PR Notes**: `pr-note-YYYY-MM-DD.md`
 
-## Agent Master Rules & Workflows
+## Agent Master Skills & Commands
 | Slash Command | File | Fungsi |
 |---------------|------|--------|
-| `/create-backlog` | `.agents/workflows/create-backlog.md` | Memecah note menjadi file backlog di `tasks/backlog/` |
-| `/run-task` | `.agents/workflows/run-task.md` | Mengaktifkan task, isolasi branch git baru, pengerjaan atomic commit bertahap, strict review gatekeeper, & arsip/merge |
-| `/activate-task` | `.agents/workflows/activate-task.md` | (Alias) Mengarah langsung ke `/run-task` |
-| `/fast-polish` | `.agents/workflows/fast-polish.md` | Batch perbaikan visual / punch list dengan verifikasi ketat & auto-archive |
-| `/commit-now` | `.agents/workflows/commit-now.md` | Git commit atomic langsung untuk perubahan di luar task aktif |
-| `/run-pr` | `.agents/workflows/run-pr.md` | Susun PR Note, push remote, buat PR di GitHub, auto-merge squash, & sinkronisasi |
-| `/task-lifecycle-guide` | `.agents/workflows/task-lifecycle-guide.md` | Panduan terpadu siklus hidup task 5-tahap |
+| `/create-backlog` | `.agents/skills/create-backlog/SKILL.md` | Memecah note menjadi file backlog di `tasks/backlog/` |
+| `/run-task` | `.agents/skills/run-task/SKILL.md` | Mengaktifkan task, isolasi branch git baru, pengerjaan atomic commit bertahap, strict review gatekeeper, & auto PR squash-merge |
+| `/fast-polish` | `.agents/skills/fast-polish/SKILL.md` | Batch perbaikan visual / punch list dengan verifikasi ketat & auto-archive |
+| `/commit-now` | `.agents/skills/commit-now/SKILL.md` | Git commit atomic langsung untuk perubahan di luar task aktif |
+| `/run-pr` | `.agents/skills/run-pr/SKILL.md` | Susun PR Note, push remote, buat PR di GitHub, auto-merge squash, & sinkronisasi |
+| `/task-lifecycle-guide` | `.agents/skills/task-lifecycle-guide/SKILL.md` | Panduan terpadu siklus hidup task 5-tahap |
 
 ---
 *Created with Antigravity Workspace Scaffolder (AI-Native V2.0)*

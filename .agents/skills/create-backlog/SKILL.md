@@ -1,10 +1,11 @@
 ---
-description: "Workflow untuk membuat file-file task backlog di tasks/backlog/ berdasarkan mention file note."
+name: create-backlog
+description: "Workflow untuk memecah dan menyusun note di resource/notes/ menjadi file-file task backlog terstruktur di tasks/backlog/."
 ---
 
-# Workflow: Create Backlog
+# Skill: Create Backlog
 
-Workflow ini dipanggil dengan instruksi `/create-backlog` disertai mention berkas catatan di `@resource/notes/` (misal: `/create-backlog @resource/notes/note-2026-08-27.md`).
+Skill ini dipanggil dengan slash command `/create-backlog` disertai mention berkas catatan di `@resource/notes/` (misal: `/create-backlog @resource/notes/note-2026-11-16.md`).
 
 ---
 
@@ -46,4 +47,4 @@ Untuk setiap unit task yang dipecah:
 
 ### Step 4: Konfirmasi & Laporan ke Developer
 1. Tampilkan daftar file backlog baru yang berhasil dibuat di folder `@tasks/backlog/`.
-2. Berikan petunjuk ke developer untuk mengaktifkan task tersebut menggunakan workflow `/run-task [file-backlog]`.
+2. Berikan petunjuk ke developer untuk mengaktifkan task tersebut menggunakan skill `/run-task [file-backlog]`.

@@ -1,10 +1,11 @@
 ---
+name: run-task
 description: "Workflow standar pasca-rilis untuk mengaktifkan task dari backlog, membuat branch git terisolasi (feature/fix/chore), mengeksekusi checklist dengan atomic commit, memverifikasi secara ketat (Strict Gatekeeper), membuat PR Note, eksekusi PR GitHub squash-merge ke main, dan mengarsipkan task."
 ---
 
-# Workflow: Run Task (Branch-Isolated Execution & Strict Gatekeeper)
+# Skill: Run Task (Branch-Isolated Execution & Strict Gatekeeper)
 
-Workflow ini dipanggil dengan instruksi `/run-task` (atau `/activate-task`) disertai mention file task backlog di `@tasks/backlog/` (misal: `/run-task @tasks/backlog/014-20261116-cross-file-heuristic-footnote-popover.md`).
+Skill ini dipanggil dengan slash command `/run-task` disertai mention file task backlog di `@tasks/backlog/` (misal: `/run-task @tasks/backlog/014-20261116-cross-file-heuristic-footnote-popover.md`).
 
 ---
 
@@ -13,7 +14,7 @@ Workflow ini dipanggil dengan instruksi `/run-task` (atau `/activate-task`) dise
 ### Step 1: Validasi, Pembuatan Feature Branch, & Aktivasi Task
 1. **Validasi File Task**: Agent memeriksa keberadaan dan format file backlog yang di-mention di `@tasks/backlog/`.
 2. **Pemeriksaan Status Git**:
-   - Pastikan working tree git bersih (`git status`). Jika ada perubahan tak terduga, tanyakan/selesaikan terlebih dahulu.
+   - Pastikan working tree git bersih (`git status`). Jika ada perubahan tak terduga, selesaikan atau tanyakan terlebih dahulu.
    - Pindah ke branch produksi dan sinkronkan:
      ```bash
      git checkout main

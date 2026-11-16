@@ -1,10 +1,11 @@
 ---
+name: fast-polish
 description: "Workflow jalur cepat untuk menangani batch perbaikan visual, layout polishing, atau bug fixing kecil (Design QA Punch List) dengan verifikasi ketat dan auto-archive."
 ---
 
-# Workflow: Fast Polish (Design QA Punch List)
+# Skill: Fast Polish (Design QA Punch List)
 
-Workflow ini dipanggil dengan instruksi `/fast-polish` atau `/punch-list` ketika developer ingin memoles beberapa detail antarmuka sekaligus (misal: penyesuaian padding, typography, perbaikan mobile layout, z-index, atau micro-interactions).
+Skill ini dipanggil dengan slash command `/fast-polish` atau `/punch-list` ketika developer ingin memoles beberapa detail antarmuka sekaligus (misal: penyesuaian padding, typography, perbaikan mobile layout, z-index, atau micro-interactions).
 
 ---
 
@@ -58,7 +59,7 @@ Agent menampilkan checklist secara bernomor dan meminta konfirmasi developer:
 Jika ada poin yang belum terjawab, Agent menagih secara sopan namun tegas hingga seluruh nomor terkonfirmasi.
 
 ### Step 5: Auto-Archiving
-Setelah developer mengonfirmasi seluruh butir ("aman", "semua oke", "approve"):
-1. Ubah status task menjadi `Status: Completed` dan tambahkan `Completed: YYYY-MM-DD`.
-2. Pindahkan file task langsung dari `@tasks/active/` ke `@tasks/archive/`.
-3. Laporkan bahwa siklus polish telah selesai dan terdokumentasi rapi di arsip.
+Setelah seluruh poin dikonfirmasi developer ("aman", "oke", "ya"):
+1. Pindahkan file task dari `@tasks/active/` ke `@tasks/archive/`.
+2. Ubah header status menjadi `Status: Completed`.
+3. Selesaikan siklus dengan commit bersih penutup jika diperlukan.
