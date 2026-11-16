@@ -84,6 +84,12 @@ code --install-extension xhtml-reader-previewer-0.1.0.vsix
 | :---: | :---: |
 | <img src="resource/preview/Pics/02-toc-sidebar.png" alt="Table of Contents Sidebar" width="400" /> | <img src="resource/preview/Pics/03-reading-settings.png" alt="Reading Settings Popover" width="400" /> |
 
+<br />
+
+| Anchored Footnote & In-line Annotation Popover |
+| :---: |
+| <img src="resource/preview/Pics/06-footnote-popover.png" alt="Anchored Footnote Popover with Pointer Caret" width="520" /> |
+
 </div>
 
 ---
