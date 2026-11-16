@@ -51,6 +51,11 @@ This release marks a major evolution in the reading and inspection capabilities 
 
 ## 📦 Installation & Verification
 
+### Package Integrity
+| Asset | Size | SHA-256 Checksum |
+| :--- | :--- | :--- |
+| **`xhtml-reader-previewer-0.1.0.vsix`** | ~104.7 KB | `29fd337842dbb34a46410391eac4a69dcc670247c97a2bee389f7217eb3d0d9f` |
+
 ### From VS Code Marketplace
 Search for **`XHTML Reader Previewer`** (by `selvagant`) in the Extensions view and click **Install**.
 
