@@ -1272,7 +1272,7 @@ export function readerShell(
 
   ${navInfo?.historyBackInfo?.canGoBack ? `
   <aside id="history-return-pill" class="history-return-pill" role="complementary" aria-label="Return to previous reading position">
-    <button type="button" class="history-return-btn" id="history-return-btn" title="Return to ${escapeHtml(navInfo.historyBackInfo.chapterTitle || 'previous position')}${navInfo.historyBackInfo.scrollRatio !== undefined ? ` (${Math.round(navInfo.historyBackInfo.scrollRatio * 100)}%)` : ''} (Shortcut: Alt+Left)">
+    <button type="button" class="history-return-btn" id="history-return-btn" title="Return to ${escapeHtml(navInfo.historyBackInfo.chapterTitle || 'previous position')}${navInfo.historyBackInfo.scrollRatio !== undefined ? ` (${Math.round(navInfo.historyBackInfo.scrollRatio * 100)}%)` : ''} (Shortcut: Backspace / B / Alt+Left)">
       <span class="history-return-icon">${PHOSPHOR.arrowUUpLeft}</span>
       <span class="history-return-text">
         <span class="history-return-title">Kembali ke ${escapeHtml(navInfo.historyBackInfo.chapterTitle || 'posisi sebelumnya')}</span>
@@ -2371,13 +2371,16 @@ export function readerShell(
         return;
       }
 
-      // External / cross-chapter link
-      if (!/^(?:[a-z][a-z0-9+.-]*:|\\/\\/)/i.test(href)) {
-        event.preventDefault();
-        hidePopover();
-        const pos = getCurrentReadingPosition();
-        vscode.postMessage({ type: 'openLink', href: href, currentPosition: pos });
+      // External or protocol link
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) {
+        return;
       }
+
+      // Cross-chapter relative link
+      event.preventDefault();
+      hidePopover();
+      const pos = getCurrentReadingPosition();
+      navigateToChapter({ type: 'openLink', href: href, currentPosition: pos });
     });
 
     function safeEscape(str) {
@@ -2392,7 +2395,7 @@ export function readerShell(
           const href = btn.dataset.href;
           hidePopover();
           const pos = getCurrentReadingPosition();
-          vscode.postMessage({ type: 'openLink', href: href, currentPosition: pos });
+          navigateToChapter({ type: 'openLink', href: href, currentPosition: pos });
         }
       });
     }
@@ -2475,7 +2478,9 @@ export function readerShell(
         }
       }
       const canGoBack = document.body.dataset.canGoBack === 'true';
-      if (event.altKey && event.key === 'ArrowLeft') {
+      const isInputActive = document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+
+      if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'Left' || event.code === 'ArrowLeft')) {
         event.preventDefault();
         if (canGoBack) {
           triggerHistoryBack();
@@ -2484,17 +2489,22 @@ export function readerShell(
         }
         return;
       }
-      if (event.key === 'Backspace' && document.activeElement && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      if (event.key === 'Backspace' && !isInputActive) {
         if (canGoBack) {
           event.preventDefault();
           triggerHistoryBack();
           return;
         }
       }
+      if ((event.key === 'b' || event.key === 'B') && !isInputActive && canGoBack) {
+        event.preventDefault();
+        triggerHistoryBack();
+        return;
+      }
       if (event.key === '[') {
         navigateToChapter({ type: 'prevChapter' });
       }
-      if (event.key === ']' || (event.altKey && event.key === 'ArrowRight')) {
+      if (event.key === ']' || (event.altKey && (event.key === 'ArrowRight' || event.key === 'Right' || event.code === 'ArrowRight'))) {
         navigateToChapter({ type: 'nextChapter' });
       }
     });
