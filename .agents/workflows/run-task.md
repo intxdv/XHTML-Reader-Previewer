@@ -1,5 +1,5 @@
 ---
-description: "Workflow standar pasca-rilis untuk mengaktifkan task dari backlog, membuat branch git terisolasi (feature/fix/chore), mengeksekusi checklist dengan atomic commit, memverifikasi secara ketat (Strict Gatekeeper), dan mengarsipkan/merge setelah persetujuan developer."
+description: "Workflow standar pasca-rilis untuk mengaktifkan task dari backlog, membuat branch git terisolasi (feature/fix/chore), mengeksekusi checklist dengan atomic commit, memverifikasi secara ketat (Strict Gatekeeper), membuat PR Note, eksekusi PR GitHub squash-merge ke main, dan mengarsipkan task."
 ---
 
 # Workflow: Run Task (Branch-Isolated Execution & Strict Gatekeeper)
@@ -87,19 +87,52 @@ Workflow ini dipanggil dengan instruksi `/run-task` (atau `/activate-task`) dise
 
 ---
 
-### Step 5: Persetujuan Developer, Integrasi Branch, & Archiving
+### Step 5: Persetujuan Developer, PR Note, GitHub PR Squash & Archiving
 1. Setelah **100% poin checklist dan revisi TERJAWAB & TERKONFIRMASI**:
-   a. Agent menanyakan persetujuan akhir pengarsipan dan metode integrasi branch:
+   a. Agent menanyakan persetujuan akhir:
       > *"Seluruh poin checklist pada task `{task_filename}` telah terjawab dan terverifikasi aman di branch `{branch-name}`.*
-      > *Apakah disetujui untuk di-merge ke `main` dan diarsipkan ke `tasks/archive/`?"*
-   b. Menunggu persetujuan eksplisit dari developer.
-   c. **Integrasi ke Main**:
-      - Jika menggunakan alur merge lokal:
-        ```bash
-        git checkout main
-        git merge <branch-name> # atau git merge --squash <branch-name>
-        git push origin main
-        git branch -d <branch-name> # hapus branch lokal yang sudah di-merge
-        ```
-      - Atau jika menggunakan alur PR GitHub, delegasikan ke workflow `/run-pr`.
-   d. Ubah status task menjadi `Status: Completed`, catat tanggal penyelesaian `Completed: YYYY-MM-DD`, dan pindahkan file task dari `@tasks/review/` ke `@tasks/archive/`.
+      > *Apakah disetujui untuk membuka Pull Request, melakukan squash-merge ke `main`, dan mengarsipkan task?"*
+   b. Menunggu persetujuan eksplisit dari developer ("ya", "oke", "merge").
+
+2. **Penyusunan Dokumen PR Note (`resource/pr-notes/`)**:
+   - Susun catatan PR di `resource/pr-notes/pr-note-{NNN}-{short-title}.md` mengacu pada template `@resource/templates/pr-note-template.md`.
+   - Ringkas perubahan fitur/bugfix/chore, checklist yang terselesaikan, dan riwayat commit.
+
+3. **Push Branch ke GitHub Remote**:
+   ```bash
+   git push -u origin <branch-name>
+   ```
+
+4. **Buka Pull Request di GitHub (GitHub MCP Server)**:
+   - Panggil tool `create_pull_request`:
+     - `owner: "intxdv"`
+     - `repo: "XHTML-Reader-Previewer"`
+     - `title: "<type>(<scope>): <deskripsi singkat task>"`
+     - `head: "<branch-name>"`
+     - `base: "main"`
+     - `body`: Konten lengkap dari dokumen PR Note yang baru dibuat.
+   - Catat nomor PR dan link URL PR.
+
+5. **Eksekusi Auto-Merge (Squash & Merge)**:
+   - Panggil tool `merge_pull_request`:
+     - `owner: "intxdv"`
+     - `repo: "XHTML-Reader-Previewer"`
+     - `pull_number`: nomor PR
+     - `merge_method: "squash"`
+     - `commit_title: "<type>(<scope>): <deskripsi singkat task> (#<pull_number>)"`
+
+6. **Sinkronisasi Lokal & Bersihkan Branch**:
+   ```bash
+   git checkout main
+   git pull origin main
+   git branch -d <branch-name>
+   ```
+
+7. **Pengarsipan Dokumen Task**:
+   - Perbarui header di file task:
+     - `Status: Completed`
+     - `Completed: YYYY-MM-DD`
+     - `PR: <URL GitHub PR>`
+     - `PR Note: @resource/pr-notes/pr-note-{NNN}-{short-title}.md`
+   - Pindahkan file task dari `@tasks/review/` ke `@tasks/archive/`.
+   - Laporkan hasil merge dan pengarsipan kepada developer.
