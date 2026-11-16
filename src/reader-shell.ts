@@ -191,6 +191,20 @@ export function readerShell(
       transition: max-width 0.2s ease;
       will-change: transform;
     }
+    :root:not(.light) #content,
+    :root:not(.light) #content p,
+    :root:not(.light) #content li,
+    :root:not(.light) #content dd,
+    :root:not(.light) #content dt,
+    :root:not(.light) #content blockquote,
+    :root:not(.light) #content h1,
+    :root:not(.light) #content h2,
+    :root:not(.light) #content h3,
+    :root:not(.light) #content h4,
+    :root:not(.light) #content h5,
+    :root:not(.light) #content h6 {
+      color: var(--reader-fg);
+    }
     img, video {
       display: block;
       max-width: 100%;
