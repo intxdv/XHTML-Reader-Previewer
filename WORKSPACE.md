@@ -28,7 +28,8 @@ Workspace untuk pengembangan **XHTML Reader Previewer** (Mode: **Mode 1: Native 
 ## Conventions
 - **Git Scope & Worktrees**: Root workspace adalah repositori Git langsung. Seluruh perintah git dieksekusi langsung di root. Opsi 'New Worktree' di Antigravity didukung penuh untuk pengerjaan multi-agent terisolasi.
 - **Git Tracking Boundary**: Folder '/tasks/', '/resource/notes/', dan '/resource/pr-notes/' otomatis diproteksi dalam .gitignore agar riwayat commit dan PR tetap 100% bersih dari catatan task harian.
-- **Branch Naming**: `feature/{task-number}-{description}`
+- **Branch Naming**: `feature/{task-number}-{description}`, `fix/...`, atau `chore/...`
+- **Branch Lifecycle (Post-Release)**: Pasca-rilis, setiap task aktif wajib berjalan di branch fitur terisolasi. Branch `main` diproteksi dan hanya menerima perubahan melalui merge terverifikasi atau PR.
 - **Task File Format**: `NNN-YYYYMMDD-short-title.md` (misal: `001-20261114-init-project.md`)
 - **Strict Atomic Commit**: `<type>(<scope>): <short description>` (1 poin checklist / 1 revisi = 1 atomic commit)
 - **Notes**: `note-YYYY-MM-DD.md`
@@ -38,7 +39,8 @@ Workspace untuk pengembangan **XHTML Reader Previewer** (Mode: **Mode 1: Native 
 | Slash Command | File | Fungsi |
 |---------------|------|--------|
 | `/create-backlog` | `.agents/workflows/create-backlog.md` | Memecah note menjadi file backlog di `tasks/backlog/` |
-| `/activate-task` | `.agents/workflows/activate-task.md` | Mengaktifkan task, pengerjaan atomic commit bertahap, strict review gatekeeper, & arsip |
+| `/run-task` | `.agents/workflows/run-task.md` | Mengaktifkan task, isolasi branch git baru, pengerjaan atomic commit bertahap, strict review gatekeeper, & arsip/merge |
+| `/activate-task` | `.agents/workflows/activate-task.md` | (Alias) Mengarah langsung ke `/run-task` |
 | `/fast-polish` | `.agents/workflows/fast-polish.md` | Batch perbaikan visual / punch list dengan verifikasi ketat & auto-archive |
 | `/commit-now` | `.agents/workflows/commit-now.md` | Git commit atomic langsung untuk perubahan di luar task aktif |
 | `/run-pr` | `.agents/workflows/run-pr.md` | Susun PR Note, push remote, buat PR di GitHub, auto-merge squash, & sinkronisasi |

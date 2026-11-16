@@ -46,4 +46,4 @@ Untuk setiap unit task yang dipecah:
 
 ### Step 4: Konfirmasi & Laporan ke Developer
 1. Tampilkan daftar file backlog baru yang berhasil dibuat di folder `@tasks/backlog/`.
-2. Berikan petunjuk ke developer untuk mengaktifkan task tersebut menggunakan workflow `/activate-task [file-backlog]`.
+2. Berikan petunjuk ke developer untuk mengaktifkan task tersebut menggunakan workflow `/run-task [file-backlog]`.
