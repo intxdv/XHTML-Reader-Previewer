@@ -52,7 +52,7 @@ Download the standalone `.vsix` installer from the [Latest GitHub Release](https
 
 To install manually:
 ```bash
-code --install-extension xhtml-reader-previewer-0.0.3.vsix
+code --install-extension xhtml-reader-previewer-0.1.0.vsix
 ```
 *Or via VS Code UI: Extensions View ➔ Click `...` (More Actions) ➔ **Install from VSIX...** ➔ Select the downloaded file.*
 
@@ -70,7 +70,9 @@ code --install-extension xhtml-reader-previewer-0.0.3.vsix
   - Themes: **Dark**, **Light**, and **Sepia**
   - Font families: **Serif**, **Sans-Serif**, and **Monospace**
   - Adjust font sizes, line heights, and reading column widths on the fly.
-- 📌 **Anchored Footnote & Noteref Popovers**: Hover or click footnote references to read notes without losing your reading position.
+- 📌 **Anchored Footnote & Noteref Popovers**: Hover or click footnote references (`¹`, `[1]`, `*`) to immediately inspect translation notes, citations, and multilingual explanations in an anchored popover with a precise pointer caret—never losing your reading position.
+- ⏪ **Reading Navigation History Stack**: Seamlessly jump to chapters or references and return instantly using the floating return pill or keyboard shortcuts.
+- 📑 **Canonical EPUB Spine Inspector**: Dual-tab sidebar (`Contents` vs `Spine Order`) adhering strictly to the OPF `<spine>` sequence with `NON-LINEAR` badges and rich toolbar metadata.
 - 💾 **Reading Location Persistence**: Automatically remembers your exact reading progress, scroll offset, and last opened chapter per book across sessions.
 - ⚡ **Ultra-Compact Immersive UI**: Floating, auto-collapsing toolbar with official Phosphor icons and ghost aesthetics.
 
@@ -112,7 +114,8 @@ Double-click any `.epub` file in your workspace to open it immediately in the de
 | :--- | :--- |
 | **Next / Previous Page (Paginated)** | `→` / `←` or `PageDown` / `PageUp` |
 | **Next / Previous Chapter** | `]` / `[` or Header Navigation Buttons (`‹` / `›`) |
-| **Toggle Table of Contents** | `T` or Click Contents Button |
+| **Return to Previous Position** | `Backspace` / `B` / `Alt+Left` or Floating Return Pill |
+| **Toggle Table of Contents & Spine** | `T` or Click Contents Button |
 | **Quick Search TOC** | `/` (focuses TOC search input) |
 | **Open Settings** | `S` or Click Settings Icon |
 | **Natural Chapter Scroll Transition** | Scroll past top/bottom boundaries (Overscroll) |

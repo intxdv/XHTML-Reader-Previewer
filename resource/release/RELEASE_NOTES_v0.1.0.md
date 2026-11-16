@@ -9,9 +9,11 @@ This release marks a major evolution in the reading and inspection capabilities 
 ## 🌟 What's New in v0.1.0
 
 ### 1. 📌 Cross-File & Heuristic Footnote Popover Extraction
+- **Anchored In-Line Popover with Pointer Caret**: Hover or click footnote superscripts (`¹`, `[1]`, `*`) to immediately inspect translation notes (TL notes), citations, and multilingual explanations in an anchored floating popover with a precise pointer arrow pointing directly to the anchor link—never losing your reading position or jumping away from the text.
 - **Asynchronous Cross-File Resolution**: Footnotes located in separate files (e.g., `notes.xhtml` or `endnotes.xhtml`) are now loaded asynchronously via webview message passing without opening full external documents.
 - **5-Layer Heuristic Detection**: Automatically detects footnote and citation links via `epub:type` (`noteref`, `footnote`), ARIA roles (`doc-noteref`, `doc-biblioref`), class names, structural patterns (`sup`, `sub`), text patterns (`[1]`, `(1)`, `*`, `†`), and fragment identifier semantics (`#fn1`, `#note-1`).
 - **Clean Content Extraction**: Extracts `<aside>`, `<li>`, or enclosing `<p>` elements while cleanly stripping backlink return symbols (`↩`, `^`, `↑`) for distraction-free previewing.
+- **Collision-Aware Positioning**: Automatically calculates viewport boundaries to position the popover above or below the link with an aligned caret tip.
 - **Graceful Fallbacks & Loaders**: Features a lightweight animated loading spinner and an informative "Target Not Found" fallback popover if the target anchor is missing, complete with a direct button to open the file.
 
 ### 2. ⏪ Reading Navigation History Stack & Return Pill
