@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { sanitizeXhtml, extractElementById } from './xhtml';
-import { readerShell, ReaderNavInfo } from './reader-shell';
-import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './epub';
-import { StateManager, ReaderPreferences, NavigationHistory, ReadingLocation } from './state-manager';
-import { EpubCacheManager, ArchiveSecurityError, ArchiveCorruptError } from './archive';
+import { sanitizeXhtml, extractElementById } from './core/xhtml';
+import { readerShell, ReaderNavInfo } from './core/reader-shell';
+import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './core/epub';
+import { StateManager, ReaderPreferences, NavigationHistory, ReadingLocation } from './core/state-manager';
+import { EpubCacheManager, ArchiveSecurityError, ArchiveCorruptError } from './core/archive';
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm', '.epub']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
