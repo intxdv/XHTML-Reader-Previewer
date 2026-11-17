@@ -96,7 +96,7 @@ export class NavigationHistory {
 
 export interface MementoLike {
   get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): Thenable<void> | Promise<void>;
+  update(key: string, value: unknown): Promise<void> | PromiseLike<void>;
 }
 
 export type StateStorageAdapter = MementoLike;
