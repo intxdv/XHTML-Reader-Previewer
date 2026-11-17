@@ -1,6 +1,7 @@
-import * as vscode from 'vscode';
+import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { ReaderPreferences, ReadingLocation, DEFAULT_PREFERENCES } from './state-manager';
+import { ResourceUri } from './epub';
 
 export interface ReaderTocItem {
   label: string;
@@ -89,11 +90,15 @@ const PHOSPHOR = {
   x: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="14" height="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>`
 };
 
+export interface ReaderWebviewLike {
+  cspSource: string;
+}
+
 export function readerShell(
   content: string,
-  source: vscode.Uri,
+  source: ResourceUri | string,
   fragment: string | undefined,
-  webview: vscode.Webview,
+  webview: ReaderWebviewLike,
   navInfo?: ReaderNavInfo,
   preferences?: ReaderPreferences,
   initialLocation?: ReadingLocation,
@@ -101,7 +106,8 @@ export function readerShell(
   startAtBottom = false
 ): string {
   const nonce = randomBytes(16).toString('base64');
-  const title = escapeHtml(vscode.workspace.asRelativePath(source, false) || source.fsPath);
+  const sourcePath = typeof source === 'string' ? source : (source.fsPath || source.path);
+  const title = escapeHtml(navInfo?.bookTitle ? `${navInfo.bookTitle} - ${path.basename(sourcePath)}` : path.basename(sourcePath));
   const initialFragment = escapeHtml(fragment ?? '');
 
   const prefs: ReaderPreferences = {
@@ -1505,7 +1511,21 @@ export function readerShell(
       history.scrollRestoration = 'manual';
     }
 
-    const vscode = acquireVsCodeApi();
+    const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : {
+      postMessage: function(msg) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, '*');
+        } else {
+          fetch('/api/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(msg)
+          }).catch(function(err) {
+            console.warn('Sidecar message dispatch failed:', err);
+          });
+        }
+      }
+    };
     const popover = document.getElementById('footnote-popover');
     const caret = document.getElementById('footnote-caret');
     const noteContent = document.getElementById('footnote-content');
