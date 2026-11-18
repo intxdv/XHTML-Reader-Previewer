@@ -854,29 +854,25 @@ export class SidecarServer {
       margin-bottom: 1.35rem;
     }
 
-    .brand-badge {
+    .brand-logo-wrap {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 56px;
-      height: 56px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       margin-bottom: 0.75rem;
-      overflow: hidden;
     }
 
     .brand-logo {
-      width: 44px;
-      height: 44px;
+      width: 56px;
+      height: 56px;
       object-fit: contain;
-      border-radius: 10px;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
     }
 
     .brand-fallback-icon {
       color: var(--accent-cyan);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
     h1 {
@@ -1300,10 +1296,10 @@ export class SidecarServer {
   <div class="shell">
     <div class="card">
       <div class="card-header">
-        <div class="brand-badge">
-          <img src="/logo.png" alt="XHTML Reader Logo" class="brand-logo" onerror="this.style.display='none'; document.getElementById('fallback-logo-icon').style.display='flex';" />
+        <div class="brand-logo-wrap">
+          <img src="/logo.png" alt="XHTML Reader Logo" class="brand-logo" onerror="this.style.display='none'; document.getElementById('fallback-logo-icon').style.display='inline-flex';" />
           <div id="fallback-logo-icon" class="brand-fallback-icon" style="display: none;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
               <path d="M6 6h10"></path>
               <path d="M6 10h7"></path>
