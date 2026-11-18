@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { sanitizeXhtml, extractElementById } from '../core/xhtml';
 import { readerShell, ReaderNavInfo, ReaderSpineNavInfo, ReaderTocItem } from '../core/reader-shell';
 import {
@@ -29,6 +30,7 @@ export interface SidecarServerOptions {
   host?: string;
   storageDir?: string;
   cacheDir?: string;
+  workspaceDirs?: string[];
 }
 
 export interface LoadedBookState {
@@ -71,6 +73,7 @@ export class SidecarServer {
   private sseClients = new Set<http.ServerResponse>();
   private cacheManager: EpubCacheManager;
   private cacheDir: string;
+  private workspaceDirs: string[] = [];
   private stateManager: StateManager;
   private navigationHistory = new NavigationHistory();
   private loadedBook: LoadedBookState | undefined;
@@ -83,6 +86,10 @@ export class SidecarServer {
     const envPort = process.env.ANTIGRAVITY_SIDECAR_WEB_PORT;
     this.port = options.port ?? (envPort ? parseInt(envPort, 10) : 5890);
     this.host = options.host ?? '127.0.0.1';
+
+    if (options.workspaceDirs && options.workspaceDirs.length > 0) {
+      this.workspaceDirs = [...options.workspaceDirs];
+    }
 
     const cacheBase = options.cacheDir ?? path.join(os.tmpdir(), 'xhtml-reader-sidecar');
     this.cacheDir = cacheBase;
@@ -164,7 +171,17 @@ export class SidecarServer {
   }
 
   public async openBook(filePath: string, spineIndex = 0, targetId?: string): Promise<LoadedBookState> {
-    const absolutePath = path.resolve(filePath);
+    let absolutePath = path.resolve(filePath);
+    if (!fs.existsSync(absolutePath)) {
+      const roots = this.resolveWorkspaceDirs();
+      for (const r of roots) {
+        const candidate = path.resolve(r, filePath);
+        if (fs.existsSync(candidate)) {
+          absolutePath = candidate;
+          break;
+        }
+      }
+    }
     await fsp.access(absolutePath, fs.constants.R_OK);
 
     const ext = path.extname(absolutePath).toLowerCase();
@@ -359,9 +376,31 @@ export class SidecarServer {
 
     // 3c. Workspace Files API
     if (pathname === '/api/workspace-files' && req.method === 'GET') {
-      const files = await this.scanWorkspaceFiles();
+      const files = await this.scanAllWorkspaceFiles();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ files }));
+      return;
+    }
+
+    // 3d. Set Workspace API
+    if (pathname === '/api/set-workspace' && req.method === 'POST') {
+      try {
+        const body = await this.readRequestBody(req);
+        const parsed = JSON.parse(body || '{}');
+        const uris = parsed.workspaceUris || parsed.workspacePaths || [];
+        for (const u of uris) {
+          const p = this.uriToFsPath(u);
+          if (fs.existsSync(p) && !this.workspaceDirs.includes(p)) {
+            this.workspaceDirs.push(p);
+          }
+        }
+        const files = await this.scanAllWorkspaceFiles();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, workspaceDirs: this.workspaceDirs, files }));
+      } catch (err: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
       return;
     }
 
@@ -692,12 +731,130 @@ export class SidecarServer {
     }
   }
 
+  public uriToFsPath(uri: string): string {
+    if (!uri) return '';
+    try {
+      if (uri.startsWith('file://') || uri.startsWith('file:')) {
+        return fileURLToPath(uri);
+      }
+    } catch {
+      // fallback
+    }
+    return uri;
+  }
+
+  public resolveWorkspaceDirs(): string[] {
+    const dirs: string[] = [];
+    const seen = new Set<string>();
+
+    const addDir = (dirPath: string | undefined | null) => {
+      if (!dirPath) return;
+      try {
+        const resolved = path.resolve(dirPath);
+        if (fs.existsSync(resolved) && !seen.has(resolved)) {
+          seen.add(resolved);
+          dirs.push(resolved);
+        }
+      } catch {
+        // ignore invalid paths
+      }
+    };
+
+    // 1. Explicitly configured or dynamically pushed workspaceDirs
+    for (const d of this.workspaceDirs) {
+      addDir(d);
+    }
+
+    // 2. Discover from active Antigravity Project (~/.gemini/config/projects/<id>.json)
+    try {
+      const projectsDir = path.join(os.homedir(), '.gemini', 'config', 'projects');
+      if (fs.existsSync(projectsDir)) {
+        const activeProjectId = process.env.ANTIGRAVITY_PROJECT_ID;
+        let targetFiles: string[] = [];
+
+        if (activeProjectId) {
+          const directFile = path.join(projectsDir, `${activeProjectId}.json`);
+          if (fs.existsSync(directFile)) {
+            targetFiles.push(directFile);
+          }
+        }
+
+        // If no active project ID or file not found, check the most recently modified project
+        if (targetFiles.length === 0 && dirs.length === 0) {
+          const entries = fs.readdirSync(projectsDir, { withFileTypes: true });
+          const sorted = entries
+            .filter((e) => e.isFile() && e.name.endsWith('.json') && e.name !== 'outside-of-project.json')
+            .map((e) => {
+              const fullPath = path.join(projectsDir, e.name);
+              const mtime = fs.statSync(fullPath).mtimeMs;
+              return { fullPath, mtime };
+            })
+            .sort((a, b) => b.mtime - a.mtime);
+
+          if (sorted.length > 0) {
+            targetFiles.push(sorted[0].fullPath);
+          }
+        }
+
+        for (const filePath of targetFiles) {
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const data = JSON.parse(content);
+            const resources = data.projectResources?.resources;
+            if (Array.isArray(resources)) {
+              for (const r of resources) {
+                const folderUri = r.gitFolder?.folderUri || r.folder?.folderUri || r.folderUri;
+                if (typeof folderUri === 'string') {
+                  const localPath = this.uriToFsPath(folderUri);
+                  addDir(localPath);
+                }
+              }
+            }
+          } catch {
+            // ignore bad project json
+          }
+        }
+      }
+    } catch {
+      // ignore discovery error
+    }
+
+    // 3. Fallback to process.cwd() if nothing else found
+    if (dirs.length === 0) {
+      addDir(process.cwd());
+    }
+
+    return dirs;
+  }
+
+  public async scanAllWorkspaceFiles(): Promise<
+    Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>
+  > {
+    const roots = this.resolveWorkspaceDirs();
+    const allFiles: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }> = [];
+    const seen = new Set<string>();
+
+    for (const root of roots) {
+      const files = await this.scanWorkspaceFiles(root, 0, 3, root);
+      for (const f of files) {
+        if (!seen.has(f.fullPath)) {
+          seen.add(f.fullPath);
+          allFiles.push(f);
+        }
+      }
+    }
+
+    return allFiles;
+  }
+
   private async scanWorkspaceFiles(
     dir = process.cwd(),
     depth = 0,
-    maxDepth = 3
+    maxDepth = 3,
+    rootDir?: string
   ): Promise<Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>> {
     if (depth > maxDepth) return [];
+    const effectiveRoot = rootDir ?? dir;
     try {
       const entries = await fsp.readdir(dir, { withFileTypes: true });
       const results: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }> = [];
@@ -714,12 +871,12 @@ export class SidecarServer {
         }
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-          const sub = await this.scanWorkspaceFiles(fullPath, depth + 1, maxDepth);
+          const sub = await this.scanWorkspaceFiles(fullPath, depth + 1, maxDepth, effectiveRoot);
           results.push(...sub);
         } else if (entry.isFile()) {
           const ext = path.extname(entry.name).toLowerCase();
           if (['.epub', '.xhtml', '.html', '.htm'].includes(ext)) {
-            const relPath = path.relative(process.cwd(), fullPath).replace(/\\/g, '/');
+            const relPath = path.relative(effectiveRoot, fullPath).replace(/\\/g, '/');
             results.push({
               fullPath,
               relPath,
@@ -735,24 +892,11 @@ export class SidecarServer {
     }
   }
 
-  private escapeText(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
-  private async serveReaderUi(_req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    const preferences = this.stateManager.getPreferences();
-
-    if (!this.loadedBook) {
-      const workspaceFiles = await this.scanWorkspaceFiles();
-      let filesListHtml = '';
-
-      if (workspaceFiles.length > 0) {
-        filesListHtml = `
+  private renderFilesHtml(
+    workspaceFiles: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>
+  ): string {
+    if (workspaceFiles.length > 0) {
+      return `
       <div class="workspace-section">
         <div class="section-title">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -785,12 +929,28 @@ export class SidecarServer {
             .join('')}
         </div>
       </div>`;
-      } else {
-        filesListHtml = `
+    }
+    return `
       <div class="empty-tip">
         <p>Tidak ada berkas .epub atau .xhtml di workspace saat ini.</p>
       </div>`;
-      }
+  }
+
+  private escapeText(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  private async serveReaderUi(_req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    const preferences = this.stateManager.getPreferences();
+
+    if (!this.loadedBook) {
+      const workspaceFiles = await this.scanAllWorkspaceFiles();
+      const filesListHtml = this.renderFilesHtml(workspaceFiles);
 
       // Empty state
       const emptyHtml = `<!DOCTYPE html>
@@ -832,6 +992,7 @@ export class SidecarServer {
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      min-height: 100vh;
       padding: 1.5rem 1rem;
       box-sizing: border-box;
       overflow-y: auto;
@@ -841,7 +1002,7 @@ export class SidecarServer {
     .shell {
       width: 100%;
       max-width: 440px;
-      margin: auto 0;
+      margin: auto;
     }
 
     .card {
@@ -1193,6 +1354,15 @@ export class SidecarServer {
     const evtSource = new EventSource('/api/events');
     evtSource.addEventListener('bookLoaded', () => { location.reload(); });
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     async function openFile(filePath) {
       try {
         const res = await fetch('/api/open', {
@@ -1208,6 +1378,62 @@ export class SidecarServer {
         }
       } catch (err) {
         alert('Gagal menghubungi server: ' + err.message);
+      }
+    }
+
+    function renderWorkspaceFiles(files) {
+      const container = document.getElementById('workspace-files-container');
+      if (!container) return;
+      if (!files || files.length === 0) {
+        container.innerHTML = '<div class="empty-tip"><p>Tidak ada berkas .epub atau .xhtml di workspace saat ini.</p></div>';
+        return;
+      }
+      const items = files
+        .map(
+          (f) =>
+            '<div class="file-item">' +
+              '<span class="file-badge ' + (f.isEpub ? 'badge-epub' : 'badge-xhtml') + '">' +
+                (f.isEpub ? 'EPUB' : 'XHTML') +
+              '</span>' +
+              '<div class="file-info">' +
+                '<span class="file-name">' + escapeHtml(f.name) + '</span>' +
+                '<span class="file-path" title="' + escapeHtml(f.relPath) + '">' + escapeHtml(f.relPath) + '</span>' +
+              '</div>' +
+              '<button type="button" class="btn-open" onclick="openFile(\\'' + escapeHtml(f.relPath).replace(/'/g, "\\\\'") + '\\')">' +
+                '<span>Buka</span>' +
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<line x1="5" y1="12" x2="19" y2="12"></line>' +
+                  '<polyline points="12 5 19 12 12 19"></polyline>' +
+                '</svg>' +
+              '</button>' +
+            '</div>'
+        )
+        .join('');
+
+      container.innerHTML =
+        '<div class="workspace-section">' +
+          '<div class="section-title">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>' +
+            '</svg>' +
+            '<span>Berkas di Workspace</span>' +
+            '<span class="counter-chip">' + files.length + '</span>' +
+          '</div>' +
+          '<div class="file-list">' +
+            items +
+          '</div>' +
+        '</div>';
+    }
+
+    async function loadWorkspaceFiles() {
+      try {
+        const res = await fetch('/api/workspace-files');
+        const data = await res.json();
+        if (data && Array.isArray(data.files)) {
+          renderWorkspaceFiles(data.files);
+        }
+      } catch (err) {
+        console.error('Failed to load workspace files:', err);
       }
     }
 
@@ -1252,8 +1478,32 @@ export class SidecarServer {
       uploadFile(input.files[0]);
     }
 
-    // Drag and Drop support
+    // Host workspace changes listener
+    window.addEventListener('message', async (event) => {
+      if (event.data && event.data.type === 'workspace-change') {
+        const uris = event.data.payload && event.data.payload.workspaceUris;
+        if (Array.isArray(uris) && uris.length > 0) {
+          try {
+            const res = await fetch('/api/set-workspace', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ workspaceUris: uris })
+            });
+            const data = await res.json();
+            if (data && Array.isArray(data.files)) {
+              renderWorkspaceFiles(data.files);
+            }
+          } catch (err) {
+            console.error('Failed to sync workspace:', err);
+          }
+        }
+      }
+    });
+
+    // Drag and Drop & Initial load
     window.addEventListener('DOMContentLoaded', () => {
+      loadWorkspaceFiles();
+
       const dropzone = document.getElementById('dropzone');
       if (!dropzone) return;
 
@@ -1303,7 +1553,7 @@ export class SidecarServer {
         <p class="brand-sub">Pilih naskah di workspace atau pilih berkas untuk mulai membaca.</p>
       </div>
 
-      ${filesListHtml}
+      <div id="workspace-files-container">${filesListHtml}</div>
 
       <div class="divider">
         <span class="divider-line"></span>
