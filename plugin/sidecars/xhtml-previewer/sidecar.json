@@ -1,0 +1,20 @@
+{
+  "command": "node",
+  "args": [
+    "../../dist/sidecar-server.cjs"
+  ],
+  "display_name": "XHTML & EPUB Reader",
+  "description": "Interactive reader and previewer for XHTML and EPUB publications in the auxiliary pane.",
+  "has_web_ui": true,
+  "restart_policy": "always",
+  "ui_config": {
+    "display_name": "XHTML Reader",
+    "views": [
+      {
+        "title": "XHTML Reader",
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE"
+      }
+    ]
+  }
+}

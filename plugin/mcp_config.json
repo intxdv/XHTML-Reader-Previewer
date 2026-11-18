@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "xhtml_reader_mcp": {
+      "command": "node",
+      "type": "stdio",
+      "args": [
+        "dist/mcp-server.cjs"
+      ]
+    }
+  }
+}
