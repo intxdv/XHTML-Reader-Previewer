@@ -101,6 +101,7 @@
     "build": "esbuild src/vscode/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js && esbuild src/core/xhtml.ts --bundle --platform=node --format=cjs --outfile=dist/xhtml.js && esbuild src/core/epub.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/epub.js && esbuild src/core/state-manager.ts --bundle --platform=node --format=cjs --outfile=dist/state-manager.js && esbuild src/core/archive.ts --bundle --platform=node --format=cjs --outfile=dist/archive.js && npm run build:sidecar && npm run build:mcp",
     "build:sidecar": "esbuild src/antigravity/sidecar-server.ts --bundle --platform=node --format=cjs --outfile=dist/sidecar-server.cjs",
     "build:mcp": "esbuild src/antigravity/mcp-server.ts --bundle --platform=node --format=cjs --outfile=dist/mcp-server.cjs",
+    "install:plugin": "node scripts/install-plugin.js",
     "check": "tsc --noEmit",
     "check:core": "tsc -p tsconfig.core.json --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",
