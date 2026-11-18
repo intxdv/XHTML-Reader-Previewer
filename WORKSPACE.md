@@ -4,9 +4,17 @@
 Workspace untuk pengembangan **XHTML Reader Previewer** (Mode: **Mode 1: Native / Lead (Root Git Repo)**).
 
 ## Projects
-| Project | Stack | Repo | Status |
-|---------|-------|------|--------|
-| Root (Direct) | TypeScript, VS Code Extension API, esbuild | TBD | Active |
+| Project | Stack | Repo | Status | Target |
+|---------|-------|------|--------|--------|
+| Root (Direct) | TypeScript, esbuild | https://github.com/intxdv/XHTML-Reader-Previewer | Active | Dual-Target (VS Code VSIX + Antigravity 2.0 Plugin) |
+
+### Dual-Target Architecture
+- **Pure Core (`src/core/`)**: Mesin parsing EPUB & XHTML, state manager, dan UI reader-shell terisolasi tanpa dependensi vendor.
+- **VS Code Extension (`src/vscode/`)**: Adapter VS Code Webview Panel & CustomEditor (`dist/extension.js` -> `.vsix`).
+- **Antigravity 2.0 Plugin (`src/antigravity/` & `plugin/`)**:
+  - Sidecar HTTP Server (`dist/sidecar-server.cjs`) untuk Auxiliary Pane.
+  - Model Context Protocol (MCP) Server (`dist/mcp-server.cjs`) untuk Autonomous Agent (`xhtml_open_preview`, `xhtml_get_toc`, `xhtml_get_metadata`).
+  - Declarative Plugin Manifests (`plugin/plugin.json`, `mcp_config.json`, `sidecars/`, `skills/`, `rules/`).
 
 ## Team & Stakeholders
 - **Developer**: Developer
