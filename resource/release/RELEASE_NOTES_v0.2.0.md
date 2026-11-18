@@ -69,6 +69,8 @@ Download `xhtml-reader-previewer-0.2.0.vsix` from GitHub Release assets, then ru
 ```bash
 code --install-extension xhtml-reader-previewer-0.2.0.vsix
 ```
+- **File**: `xhtml-reader-previewer-0.2.0.vsix` (101.3 KB)
+- **SHA-256**: `cc59e5a5dd65d15308b9035e6b41b6cd46501773d47f0594df82fd63a3838a15`
 
 ### Option 3: Google Antigravity 2.0 Plugin
 Deploy to your local Antigravity installation:
