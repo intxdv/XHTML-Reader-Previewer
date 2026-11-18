@@ -208,3 +208,12 @@ test('readerShell contains spine order inspector tab and toolbar spine metadata'
   assert.match(extensionBundle, /tabPanes\.toc/);
 });
 
+test('readerShell contains dual-mode messaging polyfill for standalone and webview environments', async () => {
+  const fs = await import('node:fs');
+  const extensionBundle = fs.readFileSync('dist/extension.js', 'utf8');
+
+  assert.match(extensionBundle, /typeof acquireVsCodeApi === ['"]function['"]/);
+  assert.match(extensionBundle, /window\.parent\.postMessage/);
+  assert.match(extensionBundle, /\/api\/message/);
+});
+

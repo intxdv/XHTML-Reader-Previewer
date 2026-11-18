@@ -96,7 +96,82 @@ export class NavigationHistory {
 
 export interface MementoLike {
   get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): Thenable<void> | Promise<void>;
+  update(key: string, value: unknown): Promise<void> | PromiseLike<void>;
+}
+
+export type StateStorageAdapter = MementoLike;
+
+export class InMemoryStorageAdapter implements StateStorageAdapter {
+  private data = new Map<string, unknown>();
+
+  get<T>(key: string, defaultValue?: T): T {
+    if (this.data.has(key)) {
+      return this.data.get(key) as T;
+    }
+    return defaultValue as T;
+  }
+
+  async update(key: string, value: unknown): Promise<void> {
+    if (value === undefined) {
+      this.data.delete(key);
+    } else {
+      this.data.set(key, value);
+    }
+  }
+}
+
+export class JsonFileStorageAdapter implements StateStorageAdapter {
+  private inMemory = new Map<string, unknown>();
+  private loaded = false;
+
+  constructor(private readonly filePath: string) {}
+
+  private async load(): Promise<void> {
+    if (this.loaded) return;
+    try {
+      const fs = await import('node:fs/promises');
+      const raw = await fs.readFile(this.filePath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      for (const [k, v] of Object.entries(parsed)) {
+        this.inMemory.set(k, v);
+      }
+    } catch {
+      // file might not exist yet, ignore
+    }
+    this.loaded = true;
+  }
+
+  private async persist(): Promise<void> {
+    try {
+      const fs = await import('node:fs/promises');
+      const path = await import('node:path');
+      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+      const obj: Record<string, unknown> = {};
+      for (const [k, v] of this.inMemory.entries()) {
+        obj[k] = v;
+      }
+      await fs.writeFile(this.filePath, JSON.stringify(obj, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('Failed to persist state storage to JSON file:', err);
+    }
+  }
+
+  get<T>(key: string, defaultValue?: T): T {
+    if (this.inMemory.has(key)) {
+      return this.inMemory.get(key) as T;
+    }
+    return defaultValue as T;
+  }
+
+  async update(key: string, value: unknown): Promise<void> {
+    await this.load();
+    if (value === undefined) {
+      this.inMemory.delete(key);
+    } else {
+      this.inMemory.set(key, value);
+    }
+    await this.persist();
+  }
 }
 
 export const DEFAULT_PREFERENCES: ReaderPreferences = {

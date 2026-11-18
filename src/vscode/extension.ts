@@ -1,11 +1,18 @@
 import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { sanitizeXhtml, extractElementById } from './xhtml';
-import { readerShell, ReaderNavInfo } from './reader-shell';
-import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage } from './epub';
-import { StateManager, ReaderPreferences, NavigationHistory, ReadingLocation } from './state-manager';
-import { EpubCacheManager, ArchiveSecurityError, ArchiveCorruptError } from './archive';
+import { sanitizeXhtml, extractElementById } from '../core/xhtml';
+import { readerShell, ReaderNavInfo } from '../core/reader-shell';
+import { locateEpubContainer, parseContainerXml, parseOpfXml, loadEpubToc, EpubPackage, ResourceUri } from '../core/epub';
+
+function asVsCodeUri(uri: ResourceUri | vscode.Uri): vscode.Uri {
+  if (uri instanceof vscode.Uri) {
+    return uri;
+  }
+  return vscode.Uri.file(uri.fsPath || uri.path);
+}
+import { StateManager, ReaderPreferences, NavigationHistory, ReadingLocation } from '../core/state-manager';
+import { EpubCacheManager, ArchiveSecurityError, ArchiveCorruptError } from '../core/archive';
 
 const supportedExtensions = new Set(['.xhtml', '.html', '.htm', '.epub']);
 const resourceAttributes = /(<(?:img|source|video|audio|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"']+)\2/gi;
@@ -165,7 +172,8 @@ async function attachReaderToWebview(
   // Attempt EPUB Package discovery & TOC loading
   let epubPackage: EpubPackage | undefined;
   try {
-    const containerRoot = archiveCacheDir ? vscode.Uri.file(archiveCacheDir) : await locateEpubContainer(source);
+    const rawContainerRoot = archiveCacheDir ? vscode.Uri.file(archiveCacheDir) : await locateEpubContainer(source);
+    const containerRoot = rawContainerRoot ? asVsCodeUri(rawContainerRoot) : undefined;
     if (containerRoot) {
       const containerUri = vscode.Uri.joinPath(containerRoot, 'META-INF', 'container.xml');
       const containerBytes = await vscode.workspace.fs.readFile(containerUri);
@@ -180,13 +188,13 @@ async function attachReaderToWebview(
 
         // Load Table of Contents
         epubPackage.toc = await loadEpubToc(epubPackage, async (itemUri) => {
-          const bytes = await vscode.workspace.fs.readFile(itemUri);
+          const bytes = await vscode.workspace.fs.readFile(asVsCodeUri(itemUri));
           return new TextDecoder('utf-8').decode(bytes);
         });
 
         // If opened from .epub archive, default initial chapter to first spine chapter
         if (ext === '.epub' && epubPackage.spine.length > 0) {
-          currentSource = epubPackage.spine[0].uri;
+          currentSource = asVsCodeUri(epubPackage.spine[0].uri);
         }
       }
     }
@@ -195,7 +203,7 @@ async function attachReaderToWebview(
   }
 
   const localResourceRoots = epubPackage
-    ? [epubPackage.containerRoot, epubPackage.opfDir, root]
+    ? [asVsCodeUri(epubPackage.containerRoot), asVsCodeUri(epubPackage.opfDir), root]
     : [root];
 
   panel.webview.options = { enableScripts: true, localResourceRoots };
@@ -207,7 +215,7 @@ async function attachReaderToWebview(
     try {
       const xhtml = await readSource(currentSource);
       const chapterDir = parentUri(currentSource);
-      const fallbackDir = epubPackage?.opfDir;
+      const fallbackDir = epubPackage ? asVsCodeUri(epubPackage.opfDir) : undefined;
       const content = await rewriteResourceUris(sanitizeXhtml(xhtml), chapterDir, panel.webview, fallbackDir);
 
       const spineIndex = epubPackage?.spine.findIndex(
@@ -284,7 +292,7 @@ async function attachReaderToWebview(
     timer = setTimeout(() => void render(), 200);
   };
 
-  const watchRoot = epubPackage ? epubPackage.containerRoot : root;
+  const watchRoot = epubPackage ? asVsCodeUri(epubPackage.containerRoot) : root;
   const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(watchRoot, '**/*'));
   const documentChange = vscode.workspace.onDidChangeTextDocument((event) => {
     if (event.document.uri.toString() === currentSource.toString()) {
@@ -299,7 +307,7 @@ async function attachReaderToWebview(
           (item) => item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
         );
         if (currentIndex > 0) {
-          currentSource = epubPackage.spine[currentIndex - 1].uri;
+          currentSource = asVsCodeUri(epubPackage.spine[currentIndex - 1].uri);
           pendingFragment = undefined;
           const startAtBottom = Boolean((message as { startAtBottom?: boolean }).startAtBottom);
           void render(!startAtBottom, startAtBottom);
@@ -314,7 +322,7 @@ async function attachReaderToWebview(
           (item) => item.uri.path.toLowerCase() === currentSource.path.toLowerCase()
         );
         if (currentIndex >= 0 && currentIndex < epubPackage.spine.length - 1) {
-          currentSource = epubPackage.spine[currentIndex + 1].uri;
+          currentSource = asVsCodeUri(epubPackage.spine[currentIndex + 1].uri);
           pendingFragment = undefined;
           void render(true, false);
         }
@@ -339,7 +347,8 @@ async function attachReaderToWebview(
     if (isRequestFootnoteMessage(message)) {
       void (async () => {
         try {
-          const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
+          const opfDir = epubPackage ? asVsCodeUri(epubPackage.opfDir) : undefined;
+          const target = resolveChapterLink(message.href, currentSource, watchRoot, opfDir);
           if (!target || !target.fragment) {
             void panel.webview.postMessage({
               type: 'footnoteResponse',
@@ -363,7 +372,7 @@ async function attachReaderToWebview(
           }
 
           const targetDir = parentUri(target.source);
-          const rewritten = await rewriteResourceUris(extractedHtml, targetDir, panel.webview, epubPackage?.opfDir);
+          const rewritten = await rewriteResourceUris(extractedHtml, targetDir, panel.webview, opfDir);
 
           void panel.webview.postMessage({
             type: 'footnoteResponse',
@@ -382,7 +391,8 @@ async function attachReaderToWebview(
     }
 
     if (isOpenLinkMessage(message)) {
-      const target = resolveChapterLink(message.href, currentSource, watchRoot, epubPackage?.opfDir);
+      const opfDir = epubPackage ? asVsCodeUri(epubPackage.opfDir) : undefined;
+      const target = resolveChapterLink(message.href, currentSource, watchRoot, opfDir);
       if (target) {
         const chapterTitle = getChapterTitle(currentSource, epubPackage);
         const pos = message.currentPosition || stateManager?.getReadingLocation(currentSource.toString()) || { scrollY: 0, scrollRatio: 0 };

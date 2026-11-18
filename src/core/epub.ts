@@ -1,10 +1,20 @@
-import type * as vscodeTypes from 'vscode';
+export interface ResourceUri {
+  path: string;
+  fsPath?: string;
+  scheme?: string;
+  toString(): string;
+  with?(change: { path?: string }): ResourceUri;
+}
 
-let vscodeModule: typeof import('vscode') | undefined;
-try {
-  vscodeModule = require('vscode');
-} catch {
-  // Allow running in pure Node.js environments (e.g. unit tests)
+export function createResourceUri(filePath: string): ResourceUri {
+  const normalized = filePath.replace(/\\/g, '/');
+  return {
+    path: normalized,
+    fsPath: filePath,
+    scheme: 'file',
+    toString: () => normalized,
+    with: (change: { path?: string }) => createResourceUri(change.path ?? normalized)
+  };
 }
 
 export interface EpubManifestItem {
@@ -12,27 +22,27 @@ export interface EpubManifestItem {
   href: string;
   mediaType: string;
   properties?: string;
-  uri: vscodeTypes.Uri;
+  uri: ResourceUri;
 }
 
 export interface EpubSpineItem {
   idref: string;
   linear?: boolean;
   href: string;
-  uri: vscodeTypes.Uri;
+  uri: ResourceUri;
 }
 
 export interface EpubTocItem {
   id?: string;
   label: string;
   href: string;
-  uri: vscodeTypes.Uri;
+  uri: ResourceUri;
 }
 
 export interface EpubPackage {
-  containerRoot: vscodeTypes.Uri;
-  opfUri: vscodeTypes.Uri;
-  opfDir: vscodeTypes.Uri;
+  containerRoot: ResourceUri;
+  opfUri: ResourceUri;
+  opfDir: ResourceUri;
   title: string;
   creator?: string;
   language?: string;
@@ -44,28 +54,37 @@ export interface EpubPackage {
 /**
  * Ascends from the given source file directory to locate a META-INF/container.xml file.
  */
-export async function locateEpubContainer(source: vscodeTypes.Uri): Promise<vscodeTypes.Uri | undefined> {
-  if (!vscodeModule) {
-    return undefined;
-  }
+export async function locateEpubContainer(
+  source: ResourceUri,
+  fileExists?: (candidate: ResourceUri) => Promise<boolean>
+): Promise<ResourceUri | undefined> {
+  const checkExists = fileExists ?? (async (candidate: ResourceUri) => {
+    try {
+      const fs = await import('node:fs/promises');
+      const targetPath = candidate.fsPath || candidate.path;
+      await fs.stat(targetPath);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   let current = parentUri(source);
-  const root = vscodeModule.workspace.workspaceFolders?.[0]?.uri;
 
   for (let i = 0; i < 6; i++) {
     const candidate = joinPath(current, 'META-INF', 'container.xml');
     try {
-      await vscodeModule.workspace.fs.stat(candidate);
-      return current;
+      if (await checkExists(candidate)) {
+        return current;
+      }
     } catch {
-      const parent = parentUri(current);
-      if (parent.toString() === current.toString()) {
-        break;
-      }
-      if (root && current.toString() === root.toString()) {
-        break;
-      }
-      current = parent;
+      // ignore
     }
+    const parent = parentUri(current);
+    if (parent.toString() === current.toString()) {
+      break;
+    }
+    current = parent;
   }
   return undefined;
 }
@@ -81,7 +100,7 @@ export function parseContainerXml(xml: string): string | undefined {
 /**
  * Safely parses the OPF Package Document into metadata, manifest, and spine.
  */
-export function parseOpfXml(xml: string, opfUri: vscodeTypes.Uri, containerRoot: vscodeTypes.Uri): EpubPackage {
+export function parseOpfXml(xml: string, opfUri: ResourceUri, containerRoot: ResourceUri): EpubPackage {
   const opfDir = parentUri(opfUri);
 
   // Metadata
@@ -162,7 +181,7 @@ export function parseOpfXml(xml: string, opfUri: vscodeTypes.Uri, containerRoot:
 /**
  * Parses EPUB 3 Navigation Document XHTML into TOC items.
  */
-export function parseNavHtml(html: string, baseDir: vscodeTypes.Uri): EpubTocItem[] {
+export function parseNavHtml(html: string, baseDir: ResourceUri): EpubTocItem[] {
   const items: EpubTocItem[] = [];
   // Find <nav> with epub:type="toc" or id="toc", or fallback to any nav
   const navMatch = /<nav\b(?=[^>]*\b(?:epub:type=["'][^"']*toc|id=["']toc))\b[^>]*>([\s\S]*?)<\/nav>/i.exec(html)
@@ -197,7 +216,7 @@ export function parseNavHtml(html: string, baseDir: vscodeTypes.Uri): EpubTocIte
 /**
  * Parses EPUB 2 NCX XML into TOC items.
  */
-export function parseNcxXml(xml: string, baseDir: vscodeTypes.Uri): EpubTocItem[] {
+export function parseNcxXml(xml: string, baseDir: ResourceUri): EpubTocItem[] {
   const items: EpubTocItem[] = [];
   const navPointRegex = /<navPoint\b[^>]*>([\s\S]*?)<\/navPoint>/gi;
   let pointMatch: RegExpExecArray | null;
@@ -230,7 +249,7 @@ export function parseNcxXml(xml: string, baseDir: vscodeTypes.Uri): EpubTocItem[
  */
 export async function loadEpubToc(
   epub: EpubPackage,
-  readFileText: (uri: vscodeTypes.Uri) => Promise<string>
+  readFileText: (uri: ResourceUri) => Promise<string>
 ): Promise<EpubTocItem[]> {
   // 1. Try finding nav item in manifest with properties="nav"
   for (const item of epub.manifest.values()) {
@@ -296,21 +315,22 @@ function decodeXmlEntities(text: string): string {
     .replace(/&#([0-9]+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
 }
 
-function parentUri(uri: vscodeTypes.Uri): vscodeTypes.Uri {
+export function parentUri(uri: ResourceUri): ResourceUri {
   const path = uri.path.slice(0, uri.path.lastIndexOf('/'));
-  return uri.with ? uri.with({ path }) : ({ ...uri, path } as vscodeTypes.Uri);
+  return uri.with ? uri.with({ path }) : {
+    ...uri,
+    path,
+    toString: () => path
+  };
 }
 
-function joinPath(base: vscodeTypes.Uri, ...segments: string[]): vscodeTypes.Uri {
-  if (vscodeModule) {
-    return vscodeModule.Uri.joinPath(base, ...segments);
-  }
+export function joinPath(base: ResourceUri, ...segments: string[]): ResourceUri {
   const cleanBase = base.path.replace(/\/+$/, '');
   const cleanSegments = segments.map((s) => s.replace(/^\/+|\/+$/g, '')).filter(Boolean);
   const newPath = cleanBase + '/' + cleanSegments.join('/');
-  return {
+  return base.with ? base.with({ path: newPath }) : {
     ...base,
     path: newPath,
     toString: () => newPath
-  } as vscodeTypes.Uri;
+  };
 }
