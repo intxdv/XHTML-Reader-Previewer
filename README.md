@@ -56,6 +56,16 @@ code --install-extension xhtml-reader-previewer-0.1.0.vsix
 ```
 *Or via VS Code UI: Extensions View ➔ Click `...` (More Actions) ➔ **Install from VSIX...** ➔ Select the downloaded file.*
 
+### Option 3: Google Antigravity 2.0 Plugin (Autonomous Auxiliary Pane & MCP)
+Install and activate directly as a native Antigravity 2.0 plugin:
+```bash
+npm run deploy:local-plugin
+```
+Once deployed to `~/.gemini/config/plugins/xhtml-reader-plugin`, Antigravity exposes:
+- **Auxiliary Pane Sidecar**: Interactive reading panel accessible via pill links `[Buka XHTML Reader](sidecar://xhtml-reader-plugin/xhtml-previewer/)`.
+- **MCP Server Tools (`xhtml_reader_mcp`)**: Autonomous inspection tools for agents (`xhtml_open_preview`, `xhtml_get_toc`, `xhtml_get_metadata`).
+- **Autonomous Reading Rules**: Dedicated agent rule guiding AI assistants to preview publications interactively.
+
 ---
 
 ## ✨ Key Features
@@ -130,21 +140,29 @@ Double-click any `.epub` file in your workspace to open it immediately in the de
 
 ## 🛠️ Development & Building
 
+The repository features a unified **Dual-Target Build Pipeline** that generates both the VS Code extension and the Antigravity 2.0 plugin from a shared core:
+
 ```bash
 # Install dependencies
 npm install
 
 # Type check
-npm run check
+npm run check          # Full check
+npm run check:core     # Pure core check (verifies zero vscode dependency)
 
-# Run unit tests
+# Run test suite (all 67 unit and integration tests)
 npm test
 
-# Build extension bundles
-npm run build
+# Build all targets (VS Code extension + Antigravity sidecar & MCP)
+npm run build:all
 
-# Package local VSIX
-npx @vscode/vsce package
+# Target 1: VS Code Extension
+npm run build:vscode
+npm run package:vsix   # Outputs standalone lean .vsix package
+
+# Target 2: Antigravity 2.0 Plugin
+npm run build:plugin   # Builds sidecar-server.cjs & mcp-server.cjs
+npm run deploy:local-plugin # Deploys bundle to ~/.gemini/config/plugins/xhtml-reader-plugin
 ```
 
 ---

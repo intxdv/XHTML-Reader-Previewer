@@ -98,14 +98,20 @@
     ]
   },
   "scripts": {
-    "build": "esbuild src/vscode/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js && esbuild src/core/xhtml.ts --bundle --platform=node --format=cjs --outfile=dist/xhtml.js && esbuild src/core/epub.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/epub.js && esbuild src/core/state-manager.ts --bundle --platform=node --format=cjs --outfile=dist/state-manager.js && esbuild src/core/archive.ts --bundle --platform=node --format=cjs --outfile=dist/archive.js && npm run build:sidecar && npm run build:mcp",
+    "build": "npm run build:all",
+    "build:core": "tsc -p tsconfig.core.json --noEmit",
+    "build:vscode": "esbuild src/vscode/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js && esbuild src/core/xhtml.ts --bundle --platform=node --format=cjs --outfile=dist/xhtml.js && esbuild src/core/epub.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/epub.js && esbuild src/core/state-manager.ts --bundle --platform=node --format=cjs --outfile=dist/state-manager.js && esbuild src/core/archive.ts --bundle --platform=node --format=cjs --outfile=dist/archive.js",
     "build:sidecar": "esbuild src/antigravity/sidecar-server.ts --bundle --platform=node --format=cjs --outfile=dist/sidecar-server.cjs",
     "build:mcp": "esbuild src/antigravity/mcp-server.ts --bundle --platform=node --format=cjs --outfile=dist/mcp-server.cjs",
+    "build:plugin": "npm run build:sidecar && npm run build:mcp",
+    "build:all": "npm run build:vscode && npm run build:plugin",
+    "package:vsix": "npx @vscode/vsce package --no-dependencies",
     "install:plugin": "node scripts/install-plugin.js",
+    "deploy:local-plugin": "node scripts/install-plugin.js",
     "check": "tsc --noEmit",
-    "check:core": "tsc -p tsconfig.core.json --noEmit",
+    "check:core": "npm run build:core",
     "test": "npm run build && node --test test/*.test.mjs",
-    "watch": "npm run build -- --watch"
+    "watch": "npm run build:vscode -- --watch"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
