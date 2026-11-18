@@ -1087,20 +1087,22 @@ export class SidecarServer {
   <title>XHTML & EPUB Reader</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    ::selection { background: #2e2d28; color: #f5f4ef; }
+    ::selection { background: rgba(147, 197, 253, 0.25); color: #ffffff; }
 
     :root {
-      --bg-canvas: #070707;
-      --bg-surface: #121210;
-      --bg-inset: #181816;
-      --border-subtle: #2a2924;
-      --border-muted: #201f1b;
-      --border-hover: #4a483f;
-      --text-primary: #f5f4ef;
-      --text-secondary: #a39e90;
-      --text-muted: #6e6a5f;
-      --btn-bg: #1c1b18;
-      --btn-hover: #262521;
+      --bg-canvas: #0a0e17;
+      --bg-surface: #111827;
+      --bg-inset: #131722;
+      --border-subtle: #1f2937;
+      --border-muted: #172033;
+      --border-hover: #374151;
+      --border-accent: #93c5fd;
+      --text-primary: #f3f4f6;
+      --text-secondary: #e5e7eb;
+      --text-muted: #9ca3af;
+      --accent-blue: #93c5fd;
+      --btn-bg: #1f2937;
+      --btn-hover: #263348;
     }
 
     html, body {
@@ -1111,7 +1113,7 @@ export class SidecarServer {
 
     body {
       background-color: var(--bg-canvas);
-      background-image: radial-gradient(circle, #2a2924 1.5px, transparent 1.5px);
+      background-image: radial-gradient(circle, #1e293b 1.5px, transparent 1.5px);
       background-size: 28px 28px;
       color: var(--text-secondary);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
@@ -1206,7 +1208,7 @@ export class SidecarServer {
     .counter-chip {
       background-color: var(--btn-bg);
       border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
+      color: var(--accent-blue);
       font-size: 0.62rem;
       padding: 0.08rem 0.38rem;
       border-radius: 0;
@@ -1227,7 +1229,7 @@ export class SidecarServer {
     }
 
     .filter-box:focus-within {
-      border-color: var(--border-hover);
+      border-color: var(--border-accent);
     }
 
     .filter-icon {
@@ -1283,15 +1285,15 @@ export class SidecarServer {
 
     .file-item:hover {
       border-color: var(--border-hover);
-      background-color: #1e1d1a;
+      background-color: #182030;
     }
 
     .file-item:focus-visible {
-      border-color: var(--border-hover);
+      border-color: var(--border-accent);
     }
 
     .file-item:active {
-      background-color: #161614;
+      background-color: #141c2c;
     }
 
     .file-badge {
@@ -1304,23 +1306,23 @@ export class SidecarServer {
       font-family: ui-monospace, SFMono-Regular, monospace;
       line-height: 1;
       text-transform: uppercase;
-      background-color: #1e1d1a;
-      border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
+      background-color: rgba(147, 197, 253, 0.08);
+      border: 1px solid rgba(147, 197, 253, 0.22);
+      color: var(--accent-blue);
       transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
     }
 
     .file-item:hover .file-badge {
-      border-color: var(--border-hover);
-      color: var(--text-primary);
-      background-color: #272622;
+      border-color: var(--border-accent);
+      color: #ffffff;
+      background-color: rgba(147, 197, 253, 0.18);
     }
 
     .badge-epub,
     .badge-xhtml {
-      background-color: #1e1d1a;
-      border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
+      background-color: rgba(147, 197, 253, 0.08);
+      border: 1px solid rgba(147, 197, 253, 0.22);
+      color: var(--accent-blue);
     }
 
     .file-info {
@@ -1354,7 +1356,7 @@ export class SidecarServer {
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0.3;
+      opacity: 0.35;
       transform: translateX(0);
       transition: opacity 0.12s ease, transform 0.12s ease, color 0.12s ease;
       flex-shrink: 0;
@@ -1363,7 +1365,7 @@ export class SidecarServer {
 
     .file-item:hover .file-action-icon {
       opacity: 1;
-      color: var(--text-primary);
+      color: var(--accent-blue);
       transform: translateX(2px);
     }
 
@@ -1407,7 +1409,7 @@ export class SidecarServer {
 
     /* Dropzone Upload Button */
     .dropzone {
-      border: 1px dashed var(--border-subtle);
+      border: 1px dashed var(--border-hover);
       border-radius: 0;
       padding: 0.75rem 0.9rem;
       background-color: var(--bg-inset);
@@ -1420,8 +1422,8 @@ export class SidecarServer {
     }
 
     .dropzone:hover, .dropzone.dragover {
-      border-color: var(--border-hover);
-      background-color: #1e1d1a;
+      border-color: var(--border-accent);
+      background-color: #182030;
     }
 
     .dropzone-icon {
@@ -1433,7 +1435,7 @@ export class SidecarServer {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--text-secondary);
+      color: var(--accent-blue);
       flex-shrink: 0;
     }
 
@@ -1470,8 +1472,8 @@ export class SidecarServer {
     }
 
     .path-bar:focus-within {
-      border-color: var(--border-hover);
-      background-color: #181816;
+      border-color: var(--border-accent);
+      background-color: #161d2d;
     }
 
     .path-bar-icon {
@@ -1499,7 +1501,7 @@ export class SidecarServer {
     .path-submit-btn {
       background-color: var(--btn-bg);
       border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
+      color: var(--accent-blue);
       border-radius: 0;
       padding: 0.32rem 0.5rem;
       cursor: pointer;
@@ -1510,9 +1512,9 @@ export class SidecarServer {
     }
 
     .path-submit-btn:hover {
-      background-color: var(--btn-hover);
-      border-color: var(--border-hover);
-      color: var(--text-primary);
+      background-color: #2563eb;
+      border-color: #3b82f6;
+      color: #ffffff;
     }
 
     /* Footnote / Agent Command Badge */
@@ -1531,10 +1533,10 @@ export class SidecarServer {
     }
 
     .badge code {
-      color: var(--text-secondary);
+      color: var(--accent-blue);
       font-family: inherit;
       font-size: 0.68rem;
-      background: #181816;
+      background: var(--bg-inset);
       padding: 0.1rem 0.35rem;
       border-radius: 0;
       border: 1px solid var(--border-subtle);
