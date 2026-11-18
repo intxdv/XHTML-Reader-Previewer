@@ -207,7 +207,61 @@ test('SidecarServer lifecycle and REST API test suite', async (t) => {
     assert.equal(statusJson.book.title, 'test-upload.xhtml');
   });
 
-  await t.test('15. Stop server cleans up smoothly', async () => {
+  await t.test('15. Multi-workspace isolation guarantees independent file listing and book sessions', async () => {
+    const os = await import('node:os');
+    const fsp = (await import('node:fs/promises')).default;
+    const tempWsA = await fsp.mkdtemp(path.join(os.tmpdir(), 'xhtml-ws-a-'));
+    const tempWsB = await fsp.mkdtemp(path.join(os.tmpdir(), 'xhtml-ws-b-'));
+
+    try {
+      await fsp.writeFile(path.join(tempWsA, 'book-a.xhtml'), '<html xmlns="http://www.w3.org/1999/xhtml"><body>Book A</body></html>');
+      await fsp.writeFile(path.join(tempWsB, 'book-b.xhtml'), '<html xmlns="http://www.w3.org/1999/xhtml"><body>Book B</body></html>');
+
+      // 1. Scan Workspace A
+      const resA = await fetch(`${serverUrl}/api/workspace-files?workspace=${encodeURIComponent(tempWsA)}`);
+      const dataA = await resA.json();
+      assert.equal(dataA.files.length, 1);
+      assert.equal(dataA.files[0].name, 'book-a.xhtml');
+
+      // 2. Scan Workspace B
+      const resB = await fetch(`${serverUrl}/api/workspace-files?workspace=${encodeURIComponent(tempWsB)}`);
+      const dataB = await resB.json();
+      assert.equal(dataB.files.length, 1);
+      assert.equal(dataB.files[0].name, 'book-b.xhtml');
+
+      // 3. Open book in Workspace A
+      await fetch(`${serverUrl}/api/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: path.join(tempWsA, 'book-a.xhtml'), workspace: tempWsA })
+      });
+
+      // Status for A is loaded
+      const statusA = await (await fetch(`${serverUrl}/api/status?workspace=${encodeURIComponent(tempWsA)}`)).json();
+      assert.equal(statusA.loaded, true);
+      assert.equal(statusA.book.title, 'book-a.xhtml');
+
+      // Status for B is NOT loaded
+      const statusB = await (await fetch(`${serverUrl}/api/status?workspace=${encodeURIComponent(tempWsB)}`)).json();
+      assert.equal(statusB.loaded, false);
+      assert.equal(statusB.book, null);
+
+      // 4. set-workspace switches cleanly without merging
+      const setRes = await fetch(`${serverUrl}/api/set-workspace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceUris: [tempWsB] })
+      });
+      const setData = await setRes.json();
+      assert.equal(setData.files.length, 1);
+      assert.equal(setData.files[0].name, 'book-b.xhtml');
+    } finally {
+      await fsp.rm(tempWsA, { recursive: true, force: true });
+      await fsp.rm(tempWsB, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('16. Stop server cleans up smoothly', async () => {
     await server.stop();
     // Verify server is closed
     await assert.rejects(async () => {

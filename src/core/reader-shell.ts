@@ -1536,37 +1536,49 @@ export function readerShell(
 
     const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : {
       postMessage: function(msg) {
+        msg.workspace = window.__XHTML_WORKSPACE__ || new URLSearchParams(location.search).get('workspace') || '';
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage(msg, '*');
-        } else {
-          fetch('/api/message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(msg)
-          }).then(function(res) {
-            return res.json();
-          }).then(function(data) {
-            if (data && data.lastFootnote) {
-              window.dispatchEvent(new MessageEvent('message', {
-                data: Object.assign({ type: 'footnoteResponse' }, data.lastFootnote)
-              }));
-            }
-            if (data && data.chapterChanged) {
-              location.reload();
-            }
-          }).catch(function(err) {
-            console.warn('Sidecar message dispatch failed:', err);
-          });
+          try { window.parent.postMessage(msg, '*'); } catch (e) {}
         }
+        fetch('/api/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(msg)
+        }).then(function(res) {
+          return res.json();
+        }).then(function(data) {
+          if (data && data.lastFootnote) {
+            window.dispatchEvent(new MessageEvent('message', {
+              data: Object.assign({ type: 'footnoteResponse' }, data.lastFootnote)
+            }));
+          }
+          if (data && data.chapterChanged) {
+            location.reload();
+          }
+        }).catch(function(err) {
+          console.warn('Sidecar message dispatch failed:', err);
+        });
       }
     };
 
     // Live Server-Sent Events (SSE) listener for Antigravity Sidecar
     if (typeof EventSource === 'function' && typeof acquireVsCodeApi !== 'function') {
       try {
-        const sse = new EventSource('/api/events');
-        sse.addEventListener('chapterChanged', function() { location.reload(); });
-        sse.addEventListener('bookLoaded', function() { location.reload(); });
+        const sseWs = window.__XHTML_WORKSPACE__ || new URLSearchParams(location.search).get('workspace') || '';
+        const sseUrl = sseWs ? '/api/events?workspace=' + encodeURIComponent(sseWs) : '/api/events';
+        const sse = new EventSource(sseUrl);
+        sse.addEventListener('chapterChanged', function(e) {
+          try {
+            const d = JSON.parse(e.data || '{}');
+            if (!d.workspace || d.workspace === sseWs) { location.reload(); }
+          } catch { location.reload(); }
+        });
+        sse.addEventListener('bookLoaded', function(e) {
+          try {
+            const d = JSON.parse(e.data || '{}');
+            if (!d.workspace || d.workspace === sseWs) { location.reload(); }
+          } catch { location.reload(); }
+        });
       } catch (err) {
         // Standalone or offline mode
       }
