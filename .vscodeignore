@@ -6,7 +6,13 @@ test/**
 tasks/**
 resource/**
 .agents/**
+plugin/**
+scripts/**
+sample-book/**
+dist/sidecar-server.cjs
+dist/mcp-server.cjs
 WORKSPACE.md
 tsconfig.json
+tsconfig.core.json
 .gitignore
 *.vsix
