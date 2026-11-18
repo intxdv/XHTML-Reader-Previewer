@@ -1087,21 +1087,20 @@ export class SidecarServer {
   <title>XHTML & EPUB Reader</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    ::selection { background: #1f6feb; color: #ffffff; }
+    ::selection { background: #2e2d28; color: #f5f4ef; }
 
     :root {
-      --bg-canvas: #0d1117;
-      --bg-surface: #161b22;
-      --bg-inset: #0d1117;
-      --border-subtle: #30363d;
-      --border-muted: #21262d;
-      --border-hover: #58a6ff;
-      --text-primary: #f0f6fc;
-      --text-secondary: #c9d1d9;
-      --text-muted: #8b949e;
-      --accent-blue: #58a6ff;
-      --btn-bg: #21262d;
-      --btn-hover: #30363d;
+      --bg-canvas: #070707;
+      --bg-surface: #121210;
+      --bg-inset: #181816;
+      --border-subtle: #2a2924;
+      --border-muted: #201f1b;
+      --border-hover: #4a483f;
+      --text-primary: #f5f4ef;
+      --text-secondary: #a39e90;
+      --text-muted: #6e6a5f;
+      --btn-bg: #1c1b18;
+      --btn-hover: #262521;
     }
 
     html, body {
@@ -1112,6 +1111,8 @@ export class SidecarServer {
 
     body {
       background-color: var(--bg-canvas);
+      background-image: radial-gradient(circle, #2a2924 1.5px, transparent 1.5px);
+      background-size: 28px 28px;
       color: var(--text-secondary);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
       display: flex;
@@ -1133,10 +1134,10 @@ export class SidecarServer {
 
     .card {
       background-color: var(--bg-surface);
-      border: 1px solid rgba(48, 54, 61, 0.85);
-      border-radius: 14px;
-      padding: 1.65rem 1.45rem;
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border-subtle);
+      border-radius: 0;
+      padding: 1.75rem 1.5rem;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85);
       display: flex;
       flex-direction: column;
       align-items: stretch;
@@ -1152,20 +1153,23 @@ export class SidecarServer {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 0.65rem;
+      margin-bottom: 0.75rem;
     }
 
-    .brand-logo-svg {
-      width: 44px;
-      height: 44px;
+    .brand-logo-img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      border-radius: 0;
+      filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.6));
     }
 
     h1 {
       font-size: 1.15rem;
-      margin: 0 0 0.3rem;
+      margin: 0 0 0.35rem;
       color: var(--text-primary);
       font-weight: 600;
-      letter-spacing: -0.025em;
+      letter-spacing: -0.02em;
     }
 
     .brand-lead {
@@ -1188,9 +1192,9 @@ export class SidecarServer {
     }
 
     .section-title {
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
       color: var(--text-muted);
       font-weight: 600;
       margin-bottom: 0.5rem;
@@ -1203,9 +1207,9 @@ export class SidecarServer {
       background-color: var(--btn-bg);
       border: 1px solid var(--border-subtle);
       color: var(--text-secondary);
-      font-size: 0.65rem;
-      padding: 0.1rem 0.4rem;
-      border-radius: 9999px;
+      font-size: 0.62rem;
+      padding: 0.08rem 0.38rem;
+      border-radius: 0;
       font-family: ui-monospace, SFMono-Regular, monospace;
     }
 
@@ -1215,16 +1219,15 @@ export class SidecarServer {
       align-items: center;
       background-color: var(--bg-inset);
       border: 1px solid var(--border-subtle);
-      border-radius: 8px;
+      border-radius: 0;
       padding: 0.35rem 0.6rem;
       gap: 0.45rem;
       margin-bottom: 0.55rem;
-      transition: border-color 0.15s, background-color 0.15s;
+      transition: border-color 0.15s;
     }
 
     .filter-box:focus-within {
       border-color: var(--border-hover);
-      background-color: #11161d;
     }
 
     .filter-icon {
@@ -1250,18 +1253,18 @@ export class SidecarServer {
     .file-list {
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.35rem;
       max-height: 230px;
       overflow-y: auto;
       padding-right: 0.2rem;
     }
 
     .file-list::-webkit-scrollbar {
-      width: 5px;
+      width: 4px;
     }
     .file-list::-webkit-scrollbar-thumb {
       background-color: var(--border-subtle);
-      border-radius: 9999px;
+      border-radius: 0;
     }
 
     .file-item {
@@ -1270,52 +1273,54 @@ export class SidecarServer {
       gap: 0.65rem;
       background-color: var(--bg-inset);
       border: 1px solid var(--border-muted);
-      border-radius: 8px;
+      border-radius: 0;
       padding: 0.52rem 0.75rem;
       cursor: pointer;
       user-select: none;
       outline: none;
-      transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
     }
 
     .file-item:hover {
-      border-color: rgba(88, 166, 255, 0.4);
-      background-color: #161d27;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      border-color: var(--border-hover);
+      background-color: #1e1d1a;
     }
 
     .file-item:focus-visible {
       border-color: var(--border-hover);
-      box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.3);
     }
 
     .file-item:active {
-      transform: translateY(0) scale(0.995);
-      background-color: #121820;
+      background-color: #161614;
     }
 
     .file-badge {
-      font-size: 0.62rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      padding: 0.2rem 0.42rem;
-      border-radius: 5px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      padding: 0.18rem 0.42rem;
+      border-radius: 0;
       flex-shrink: 0;
       font-family: ui-monospace, SFMono-Regular, monospace;
       line-height: 1;
+      text-transform: uppercase;
+      background-color: #1e1d1a;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
     }
 
-    .badge-epub {
-      background-color: rgba(56, 139, 253, 0.12);
-      color: #79c0ff;
-      border: 1px solid rgba(56, 139, 253, 0.28);
+    .file-item:hover .file-badge {
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+      background-color: #272622;
     }
 
+    .badge-epub,
     .badge-xhtml {
-      background-color: rgba(188, 140, 255, 0.12);
-      color: #d2a8ff;
-      border: 1px solid rgba(188, 140, 255, 0.28);
+      background-color: #1e1d1a;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
     }
 
     .file-info {
@@ -1349,23 +1354,23 @@ export class SidecarServer {
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0.35;
+      opacity: 0.3;
       transform: translateX(0);
-      transition: opacity 0.15s ease, transform 0.15s ease, color 0.15s ease;
+      transition: opacity 0.12s ease, transform 0.12s ease, color 0.12s ease;
       flex-shrink: 0;
       margin-left: 0.25rem;
     }
 
     .file-item:hover .file-action-icon {
       opacity: 1;
-      color: var(--accent-blue);
+      color: var(--text-primary);
       transform: translateX(2px);
     }
 
     .empty-tip {
       padding: 0.75rem;
       text-align: center;
-      border-radius: 8px;
+      border-radius: 0;
       background-color: var(--bg-inset);
       border: 1px dashed var(--border-subtle);
       margin-bottom: 0.75rem;
@@ -1382,7 +1387,8 @@ export class SidecarServer {
       align-items: center;
       text-align: center;
       color: var(--text-muted);
-      font-size: 0.68rem;
+      font-size: 0.65rem;
+      font-family: ui-monospace, SFMono-Regular, monospace;
       margin: 0.8rem 0;
     }
 
@@ -1395,40 +1401,39 @@ export class SidecarServer {
     .divider-text {
       padding: 0 0.65rem;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       opacity: 0.75;
     }
 
     /* Dropzone Upload Button */
     .dropzone {
-      border: 1px dashed rgba(48, 54, 61, 0.9);
-      border-radius: 10px;
+      border: 1px dashed var(--border-subtle);
+      border-radius: 0;
       padding: 0.75rem 0.9rem;
       background-color: var(--bg-inset);
       display: flex;
       align-items: center;
       gap: 0.8rem;
       cursor: pointer;
-      transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
       margin-bottom: 0.65rem;
     }
 
     .dropzone:hover, .dropzone.dragover {
       border-color: var(--border-hover);
-      background-color: #141b24;
-      transform: translateY(-1px);
+      background-color: #1e1d1a;
     }
 
     .dropzone-icon {
       width: 34px;
       height: 34px;
-      border-radius: 8px;
+      border-radius: 0;
       background-color: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--accent-blue);
+      color: var(--text-secondary);
       flex-shrink: 0;
     }
 
@@ -1457,16 +1462,16 @@ export class SidecarServer {
       align-items: center;
       background-color: var(--bg-inset);
       border: 1px solid var(--border-subtle);
-      border-radius: 8px;
+      border-radius: 0;
       padding: 0.25rem 0.35rem 0.25rem 0.65rem;
       gap: 0.45rem;
       margin-bottom: 0.75rem;
-      transition: border-color 0.15s ease, background-color 0.15s ease;
+      transition: border-color 0.12s ease, background-color 0.12s ease;
     }
 
     .path-bar:focus-within {
       border-color: var(--border-hover);
-      background-color: #11161d;
+      background-color: #181816;
     }
 
     .path-bar-icon {
@@ -1484,6 +1489,7 @@ export class SidecarServer {
       font-size: 0.76rem;
       outline: none;
       min-width: 0;
+      font-family: inherit;
     }
 
     .path-input::placeholder {
@@ -1494,19 +1500,19 @@ export class SidecarServer {
       background-color: var(--btn-bg);
       border: 1px solid var(--border-subtle);
       color: var(--text-secondary);
-      border-radius: 6px;
+      border-radius: 0;
       padding: 0.32rem 0.5rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+      transition: background-color 0.12s, border-color 0.12s, color 0.12s;
     }
 
     .path-submit-btn:hover {
-      background-color: #1f6feb;
-      border-color: #388bfd;
-      color: #ffffff;
+      background-color: var(--btn-hover);
+      border-color: var(--border-hover);
+      color: var(--text-primary);
     }
 
     /* Footnote / Agent Command Badge */
@@ -1521,16 +1527,17 @@ export class SidecarServer {
       justify-content: center;
       gap: 0.4rem;
       text-align: center;
+      font-family: ui-monospace, SFMono-Regular, monospace;
     }
 
     .badge code {
-      color: var(--accent-blue);
-      font-family: ui-monospace, SFMono-Regular, monospace;
+      color: var(--text-secondary);
+      font-family: inherit;
       font-size: 0.68rem;
-      background: rgba(56, 139, 253, 0.1);
+      background: #181816;
       padding: 0.1rem 0.35rem;
-      border-radius: 4px;
-      border: 1px solid rgba(56, 139, 253, 0.2);
+      border-radius: 0;
+      border: 1px solid var(--border-subtle);
     }
   </style>
   <script>
@@ -1850,16 +1857,7 @@ export class SidecarServer {
     <div class="card">
       <div class="card-header">
         <div class="brand-logo-wrap">
-          <svg class="brand-logo-svg" width="44" height="44" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M6 10.5C6 9.11929 7.11929 8 8.5 8H22C23.1046 8 24 8.89543 24 10V38C24 37.1716 23.3284 36.5 22.5 36.5H8.5C7.11929 36.5 6 37.6193 6 39V10.5Z" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
-            <path d="M42 10.5C42 9.11929 40.8807 8 39.5 8H26C24.8954 8 24 8.89543 24 10V38C24 37.1716 24.6716 36.5 25.5 36.5H39.5C40.8807 36.5 42 37.6193 42 39V10.5Z" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
-            <line x1="11" y1="15" x2="19" y2="15" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
-            <line x1="11" y1="21" x2="19" y2="21" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
-            <line x1="11" y1="27" x2="17" y2="27" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
-            <line x1="29" y1="15" x2="37" y2="15" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
-            <line x1="29" y1="21" x2="37" y2="21" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
-            <line x1="29" y1="27" x2="35" y2="27" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
-          </svg>
+          <img src="/logo.png" alt="XHTML Reader" class="brand-logo-img" width="48" height="48" />
         </div>
         <h1>XHTML & EPUB Reader</h1>
         <p class="brand-lead">Belum ada buku atau berkas XHTML yang dimuat.</p>
