@@ -1372,6 +1372,27 @@ export function readerShell(
       color: #991b1b;
       border-color: #f8b4b4;
     }
+
+    @media (max-width: 520px) {
+      #toolbar {
+        padding: 0.35rem 0.5rem;
+      }
+      .toolbar-center {
+        position: static;
+        transform: none;
+        max-width: 140px;
+      }
+      .chapter-title-text, .chapter-badge-file {
+        max-width: 90px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .settings-popover {
+        right: 0.25rem;
+        width: min(19rem, calc(100vw - 0.5rem));
+      }
+    }
   </style>
 </head>
 <body${bodyClasses ? ` class="${bodyClasses}"` : ''} data-fragment="${initialFragment}" data-reset-to-top="${resetToTop ? 'true' : 'false'}" data-start-at-bottom="${startAtBottom ? 'true' : 'false'}" data-initial-ratio="${initialLocation?.scrollRatio ?? 0}" data-initial-scroll-y="${initialLocation?.scrollY ?? 0}" data-initial-anchor-id="${escapeHtml(initialLocation?.anchorId ?? '')}" data-reader-mode="${prefs.readerMode}" data-can-go-back="${Boolean(navInfo?.historyBackInfo?.canGoBack)}">
@@ -1526,6 +1547,17 @@ export function readerShell(
         }
       }
     };
+
+    // Live Server-Sent Events (SSE) listener for Antigravity Sidecar
+    if (typeof EventSource === 'function' && typeof acquireVsCodeApi !== 'function') {
+      try {
+        const sse = new EventSource('/api/events');
+        sse.addEventListener('chapterChanged', function() { location.reload(); });
+        sse.addEventListener('bookLoaded', function() { location.reload(); });
+      } catch (err) {
+        // Standalone or offline mode
+      }
+    }
     const popover = document.getElementById('footnote-popover');
     const caret = document.getElementById('footnote-caret');
     const noteContent = document.getElementById('footnote-content');
