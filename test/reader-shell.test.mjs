@@ -117,6 +117,7 @@ test('readerShell contains ultra-compact single-row toolbar with settings popove
 
   // Verify compact toolbar structure with inline chapter navigation
   assert.match(extensionBundle, /id=["']toolbar["']/);
+  assert.match(extensionBundle, /id=["']open-menu-btn["']/);
   assert.match(extensionBundle, /id=["']toolbar-hover-sensor["']/);
   assert.match(extensionBundle, /id=["']settings-btn["']/);
   assert.match(extensionBundle, /id=["']settings-popover["']/);

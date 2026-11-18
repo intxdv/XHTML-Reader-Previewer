@@ -1,0 +1,18 @@
+{
+  "name": "xhtml-reader-plugin",
+  "displayName": "XHTML & EPUB Reader",
+  "version": "0.1.0",
+  "description": "Interactive reader and previewer for XHTML and EPUB publications with auxiliary pane sidecar and MCP agent tools.",
+  "author": "selvagant",
+  "homepage": "https://github.com/intxdv/XHTML-Reader-Previewer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/intxdv/XHTML-Reader-Previewer.git"
+  },
+  "logo": "assets/logo.png",
+  "suggestedPrompts": [
+    "Open sample-book/OEBPS/ch_1.xhtml in the reader previewer",
+    "Inspect the Table of Contents of sample-book/OEBPS/ch_1.xhtml",
+    "Show publication metadata for sample-book/OEBPS/ch_1.xhtml"
+  ]
+}

@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { sanitizeXhtml, extractElementById } from '../core/xhtml';
 import { readerShell, ReaderNavInfo, ReaderSpineNavInfo, ReaderTocItem } from '../core/reader-shell';
 import {
@@ -29,6 +30,7 @@ export interface SidecarServerOptions {
   host?: string;
   storageDir?: string;
   cacheDir?: string;
+  workspaceDirs?: string[];
 }
 
 export interface LoadedBookState {
@@ -70,9 +72,12 @@ export class SidecarServer {
   private server: http.Server | undefined;
   private sseClients = new Set<http.ServerResponse>();
   private cacheManager: EpubCacheManager;
+  private cacheDir: string;
+  private workspaceDirs: string[] = [];
   private stateManager: StateManager;
   private navigationHistory = new NavigationHistory();
-  private loadedBook: LoadedBookState | undefined;
+  private loadedBooks = new Map<string, LoadedBookState>();
+  private lastActiveWorkspace?: string;
   private lastFootnoteResponse: { requestId: string; html?: string; error?: string } | undefined;
 
   public readonly port: number;
@@ -83,7 +88,12 @@ export class SidecarServer {
     this.port = options.port ?? (envPort ? parseInt(envPort, 10) : 5890);
     this.host = options.host ?? '127.0.0.1';
 
+    if (options.workspaceDirs && options.workspaceDirs.length > 0) {
+      this.workspaceDirs = [...options.workspaceDirs];
+    }
+
     const cacheBase = options.cacheDir ?? path.join(os.tmpdir(), 'xhtml-reader-sidecar');
+    this.cacheDir = cacheBase;
     this.cacheManager = new EpubCacheManager(cacheBase);
 
     const storagePath = options.storageDir
@@ -97,8 +107,16 @@ export class SidecarServer {
     }
   }
 
-  public getLoadedBook(): LoadedBookState | undefined {
-    return this.loadedBook;
+  public getLoadedBook(workspace?: string): LoadedBookState | undefined {
+    if (workspace) {
+      const key = this.normalizeWorkspaceKey(workspace);
+      return this.loadedBooks.get(key);
+    }
+    if (this.lastActiveWorkspace) {
+      const book = this.loadedBooks.get(this.lastActiveWorkspace);
+      if (book) return book;
+    }
+    return this.loadedBooks.values().next().value;
   }
 
   public async start(): Promise<string> {
@@ -161,8 +179,29 @@ export class SidecarServer {
     }
   }
 
-  public async openBook(filePath: string, spineIndex = 0, targetId?: string): Promise<LoadedBookState> {
-    const absolutePath = path.resolve(filePath);
+  public async openBook(
+    filePath: string,
+    spineIndex = 0,
+    targetId?: string,
+    workspaceHint?: string
+  ): Promise<LoadedBookState> {
+    let absolutePath = path.resolve(filePath);
+    if (!fs.existsSync(absolutePath)) {
+      const targetRoot = this.resolveTargetWorkspace(workspaceHint);
+      const candidate = path.resolve(targetRoot, filePath);
+      if (fs.existsSync(candidate)) {
+        absolutePath = candidate;
+      } else {
+        const roots = this.resolveWorkspaceDirs();
+        for (const r of roots) {
+          const c = path.resolve(r, filePath);
+          if (fs.existsSync(c)) {
+            absolutePath = c;
+            break;
+          }
+        }
+      }
+    }
     await fsp.access(absolutePath, fs.constants.R_OK);
 
     const ext = path.extname(absolutePath).toLowerCase();
@@ -188,6 +227,10 @@ export class SidecarServer {
       }
     }
 
+    let epubPackage: EpubPackage | undefined;
+    let safeSpineIndex = 0;
+    let currentChapterPath = absolutePath;
+
     if (containerRootPath) {
       const containerUri = createResourceUri(path.join(containerRootPath, 'META-INF', 'container.xml'));
       const containerXml = await fsp.readFile(containerUri.fsPath!, 'utf-8');
@@ -201,14 +244,14 @@ export class SidecarServer {
       const opfUri = createResourceUri(opfPath);
       const containerRootUri = createResourceUri(containerRootPath);
       const opfXml = await fsp.readFile(opfPath, 'utf-8');
-      const epubPackage = parseOpfXml(opfXml, opfUri, containerRootUri);
+      epubPackage = parseOpfXml(opfXml, opfUri, containerRootUri);
 
       epubPackage.toc = await loadEpubToc(epubPackage, async (uri) => {
         return fsp.readFile(uri.fsPath || uri.path, 'utf-8');
       });
 
       // Find spine index if opening a specific chapter file
-      let safeSpineIndex = Math.max(0, Math.min(spineIndex, epubPackage.spine.length - 1));
+      safeSpineIndex = Math.max(0, Math.min(spineIndex, epubPackage.spine.length - 1));
       if (!stat.isDirectory() && ext !== '.epub') {
         const foundIdx = epubPackage.spine.findIndex(
           (item) => path.resolve(item.uri.fsPath || item.uri.path) === absolutePath
@@ -219,43 +262,37 @@ export class SidecarServer {
       }
 
       const initialChapter = epubPackage.spine[safeSpineIndex];
-      const currentChapterPath = initialChapter ? (initialChapter.uri.fsPath || initialChapter.uri.path) : '';
-
-      this.loadedBook = {
-        filePath: absolutePath,
-        fileName,
-        isEpub: true,
-        title: epubPackage.title,
-        cacheDir: ext === '.epub' ? containerRootPath : undefined,
-        bookRootDir: containerRootPath,
-        epubPackage,
-        currentSpineIndex: safeSpineIndex,
-        currentChapterPath,
-        currentFragment: targetId
-      };
-    } else {
-      // Standalone XHTML / HTML file
-      const bookRootDir = path.dirname(absolutePath);
-      this.loadedBook = {
-        filePath: absolutePath,
-        fileName,
-        isEpub: false,
-        title: fileName,
-        bookRootDir,
-        currentSpineIndex: 0,
-        currentChapterPath: absolutePath,
-        currentFragment: targetId
-      };
+      currentChapterPath = initialChapter ? (initialChapter.uri.fsPath || initialChapter.uri.path) : '';
     }
 
+    const targetWs = this.resolveTargetWorkspace(workspaceHint || absolutePath);
+    const wsKey = this.normalizeWorkspaceKey(targetWs);
+
+    const loadedBook: LoadedBookState = {
+      filePath: absolutePath,
+      fileName,
+      isEpub: Boolean(containerRootPath),
+      title: containerRootPath && epubPackage ? epubPackage.title : fileName,
+      cacheDir: ext === '.epub' ? containerRootPath : undefined,
+      bookRootDir: containerRootPath || path.dirname(absolutePath),
+      epubPackage,
+      currentSpineIndex: safeSpineIndex,
+      currentChapterPath,
+      currentFragment: targetId
+    };
+
+    this.loadedBooks.set(wsKey, loadedBook);
+    this.lastActiveWorkspace = wsKey;
+
     this.broadcastEvent('bookLoaded', {
-      title: this.loadedBook.title,
-      fileName: this.loadedBook.fileName,
-      currentSpineIndex: this.loadedBook.currentSpineIndex,
-      isEpub: this.loadedBook.isEpub
+      workspace: targetWs,
+      title: loadedBook.title,
+      fileName: loadedBook.fileName,
+      currentSpineIndex: loadedBook.currentSpineIndex,
+      isEpub: loadedBook.isEpub
     });
 
-    return this.loadedBook;
+    return loadedBook;
   }
 
   private async rewriteAssets(markup: string, chapterDir: string, bookRootDir: string): Promise<string> {
@@ -312,24 +349,35 @@ export class SidecarServer {
       return;
     }
 
+    // 1b. Brand Logo Asset
+    if (pathname === '/logo.png' && req.method === 'GET') {
+      await this.serveLogo(res);
+      return;
+    }
+
     // 2. Status API
     if (pathname === '/api/status' && req.method === 'GET') {
+      const wsParam = parsedUrl.searchParams.get('workspace') || undefined;
+      const book = this.getLoadedBook(wsParam);
+      const wsPath = this.resolveTargetWorkspace(wsParam);
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
         JSON.stringify({
           status: 'ok',
-          loaded: Boolean(this.loadedBook),
+          loaded: Boolean(book),
+          workspace: wsPath,
           port: this.port,
-          book: this.loadedBook
+          book: book
             ? {
-                filePath: this.loadedBook.filePath,
-                title: this.loadedBook.title,
-                fileName: this.loadedBook.fileName,
-                isEpub: this.loadedBook.isEpub,
-                currentSpineIndex: this.loadedBook.currentSpineIndex,
-                totalChapters: this.loadedBook.epubPackage?.spine.length ?? 1,
-                currentChapterPath: this.loadedBook.currentChapterPath,
-                currentFragment: this.loadedBook.currentFragment
+                filePath: book.filePath,
+                title: book.title,
+                fileName: book.fileName,
+                isEpub: book.isEpub,
+                currentSpineIndex: book.currentSpineIndex,
+                totalChapters: book.epubPackage?.spine.length ?? 1,
+                currentChapterPath: book.currentChapterPath,
+                currentFragment: book.currentFragment
               }
             : null
         })
@@ -340,6 +388,40 @@ export class SidecarServer {
     // 3. Open Book API
     if (pathname === '/api/open' && req.method === 'POST') {
       await this.handleOpenApi(req, res);
+      return;
+    }
+
+    // 3b. Upload and Open File API
+    if (pathname === '/api/upload' && req.method === 'POST') {
+      await this.handleUploadApi(req, res);
+      return;
+    }
+
+    // 3c. Workspace Files API
+    if (pathname === '/api/workspace-files' && req.method === 'GET') {
+      const wsParam = parsedUrl.searchParams.get('workspace');
+      const wsPath = this.resolveTargetWorkspace(wsParam || undefined);
+      const files = await this.scanWorkspaceDir(wsPath);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ workspace: wsPath, files }));
+      return;
+    }
+
+    // 3d. Set Workspace API
+    if (pathname === '/api/set-workspace' && req.method === 'POST') {
+      try {
+        const body = await this.readRequestBody(req);
+        const parsed = JSON.parse(body || '{}');
+        const uris = parsed.workspaceUris || parsed.workspacePaths || [];
+        const firstUri = uris[0];
+        const wsPath = this.resolveTargetWorkspace(firstUri);
+        const files = await this.scanWorkspaceDir(wsPath);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, workspace: wsPath, files }));
+      } catch (err: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
       return;
     }
 
@@ -364,7 +446,7 @@ export class SidecarServer {
         return;
       }
       const assetRelPath = rawUrl.replace(/^\/assets\/?/, '').split('?')[0];
-      await this.serveAsset(assetRelPath, res);
+      await this.serveAsset(assetRelPath, res, req);
       return;
     }
 
@@ -398,11 +480,13 @@ export class SidecarServer {
         return;
       }
 
-      const book = await this.openBook(parsed.filePath, parsed.spineIndex, parsed.targetId);
+      const book = await this.openBook(parsed.filePath, parsed.spineIndex, parsed.targetId, parsed.workspace);
+      const targetWs = this.resolveTargetWorkspace(parsed.workspace || parsed.filePath);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
         JSON.stringify({
           success: true,
+          workspace: targetWs,
           title: book.title,
           isEpub: book.isEpub,
           totalChapters: book.epubPackage?.spine.length ?? 1
@@ -420,49 +504,57 @@ export class SidecarServer {
       const body = await this.readRequestBody(req);
       const msg = JSON.parse(body || '{}');
 
-      if (!this.loadedBook) {
+      const wsParam = msg.workspace || undefined;
+      const loadedBook = this.getLoadedBook(wsParam);
+
+      if (!loadedBook) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'No book loaded' }));
         return;
       }
 
+      const wsPath = this.resolveTargetWorkspace(wsParam || loadedBook.filePath);
+      const wsKey = this.normalizeWorkspaceKey(wsPath);
+
       let chapterChanged = false;
 
       if (msg.type === 'prevChapter') {
-        if (this.loadedBook.isEpub && this.loadedBook.epubPackage && this.loadedBook.currentSpineIndex > 0) {
-          this.loadedBook.currentSpineIndex -= 1;
-          const chapter = this.loadedBook.epubPackage.spine[this.loadedBook.currentSpineIndex];
-          this.loadedBook.currentChapterPath = chapter.uri.fsPath || chapter.uri.path;
-          this.loadedBook.currentFragment = undefined;
-          this.loadedBook.startAtBottom = Boolean(msg.startAtBottom);
-          this.loadedBook.resetToTop = !msg.startAtBottom;
+        if (loadedBook.isEpub && loadedBook.epubPackage && loadedBook.currentSpineIndex > 0) {
+          loadedBook.currentSpineIndex -= 1;
+          const chapter = loadedBook.epubPackage.spine[loadedBook.currentSpineIndex];
+          loadedBook.currentChapterPath = chapter.uri.fsPath || chapter.uri.path;
+          loadedBook.currentFragment = undefined;
+          loadedBook.startAtBottom = Boolean(msg.startAtBottom);
+          loadedBook.resetToTop = !msg.startAtBottom;
           chapterChanged = true;
           this.broadcastEvent('chapterChanged', {
-            spineIndex: this.loadedBook.currentSpineIndex,
-            chapterPath: this.loadedBook.currentChapterPath
+            workspace: wsPath,
+            spineIndex: loadedBook.currentSpineIndex,
+            chapterPath: loadedBook.currentChapterPath
           });
         }
       } else if (msg.type === 'nextChapter') {
         if (
-          this.loadedBook.isEpub &&
-          this.loadedBook.epubPackage &&
-          this.loadedBook.currentSpineIndex < this.loadedBook.epubPackage.spine.length - 1
+          loadedBook.isEpub &&
+          loadedBook.epubPackage &&
+          loadedBook.currentSpineIndex < loadedBook.epubPackage.spine.length - 1
         ) {
-          this.loadedBook.currentSpineIndex += 1;
-          const chapter = this.loadedBook.epubPackage.spine[this.loadedBook.currentSpineIndex];
-          this.loadedBook.currentChapterPath = chapter.uri.fsPath || chapter.uri.path;
-          this.loadedBook.currentFragment = undefined;
-          this.loadedBook.resetToTop = true;
-          this.loadedBook.startAtBottom = false;
+          loadedBook.currentSpineIndex += 1;
+          const chapter = loadedBook.epubPackage.spine[loadedBook.currentSpineIndex];
+          loadedBook.currentChapterPath = chapter.uri.fsPath || chapter.uri.path;
+          loadedBook.currentFragment = undefined;
+          loadedBook.resetToTop = true;
+          loadedBook.startAtBottom = false;
           chapterChanged = true;
           this.broadcastEvent('chapterChanged', {
-            spineIndex: this.loadedBook.currentSpineIndex,
-            chapterPath: this.loadedBook.currentChapterPath
+            workspace: wsPath,
+            spineIndex: loadedBook.currentSpineIndex,
+            chapterPath: loadedBook.currentChapterPath
           });
         }
       } else if (msg.type === 'openLink' && msg.href) {
         if (msg.currentPosition) {
-          await this.stateManager.saveReadingLocation(this.loadedBook.currentChapterPath, {
+          await this.stateManager.saveReadingLocation(loadedBook.currentChapterPath, {
             scrollRatio: msg.currentPosition.scrollRatio,
             scrollY: msg.currentPosition.scrollY,
             anchorId: msg.currentPosition.anchorId
@@ -470,30 +562,31 @@ export class SidecarServer {
         }
 
         const [filePart, fragment] = msg.href.split('#');
-        let targetPath = this.loadedBook.currentChapterPath;
+        let targetPath = loadedBook.currentChapterPath;
         if (filePart) {
           const decoded = decodeURIComponent(filePart);
-          targetPath = path.resolve(path.dirname(this.loadedBook.currentChapterPath), decoded);
+          targetPath = path.resolve(path.dirname(loadedBook.currentChapterPath), decoded);
         }
 
-        if (this.isSafePath(this.loadedBook.bookRootDir, targetPath)) {
-          if (this.loadedBook.isEpub && this.loadedBook.epubPackage) {
-            const foundIdx = this.loadedBook.epubPackage.spine.findIndex(
+        if (this.isSafePath(loadedBook.bookRootDir, targetPath)) {
+          if (loadedBook.isEpub && loadedBook.epubPackage) {
+            const foundIdx = loadedBook.epubPackage.spine.findIndex(
               (item) => path.resolve(item.uri.fsPath || item.uri.path) === path.resolve(targetPath)
             );
             if (foundIdx >= 0) {
-              this.loadedBook.currentSpineIndex = foundIdx;
+              loadedBook.currentSpineIndex = foundIdx;
             }
           }
-          this.loadedBook.currentChapterPath = targetPath;
-          this.loadedBook.currentFragment = fragment;
-          this.loadedBook.resetToTop = !fragment;
-          this.loadedBook.startAtBottom = false;
+          loadedBook.currentChapterPath = targetPath;
+          loadedBook.currentFragment = fragment;
+          loadedBook.resetToTop = !fragment;
+          loadedBook.startAtBottom = false;
           chapterChanged = true;
           this.broadcastEvent('chapterChanged', {
-            spineIndex: this.loadedBook.currentSpineIndex,
-            chapterPath: this.loadedBook.currentChapterPath,
-            fragment: this.loadedBook.currentFragment
+            workspace: wsPath,
+            spineIndex: loadedBook.currentSpineIndex,
+            chapterPath: loadedBook.currentChapterPath,
+            fragment: loadedBook.currentFragment
           });
         }
       } else if (msg.type === 'savePreferences') {
@@ -501,13 +594,22 @@ export class SidecarServer {
           await this.stateManager.savePreferences(msg.preferences);
         }
       } else if (msg.type === 'saveReadingPosition') {
-        await this.stateManager.saveReadingLocation(this.loadedBook.currentChapterPath, {
+        await this.stateManager.saveReadingLocation(loadedBook.currentChapterPath, {
           scrollRatio: msg.scrollRatio,
           scrollY: msg.scrollY,
           anchorId: msg.anchorId
         });
       } else if (msg.type === 'requestFootnote') {
-        await this.handleFootnoteRequest(msg);
+        await this.handleFootnoteRequest(msg, loadedBook);
+      } else if (msg.type === 'closeBook') {
+        this.loadedBooks.delete(wsKey);
+        if (this.lastActiveWorkspace === wsKey) {
+          this.lastActiveWorkspace = undefined;
+        }
+        this.broadcastEvent('bookLoaded', { workspace: wsPath, book: null });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ received: true, chapterChanged: true }));
+        return;
       }
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -519,9 +621,7 @@ export class SidecarServer {
     }
   }
 
-  private async handleFootnoteRequest(msg: { href: string; requestId: string }): Promise<void> {
-    if (!this.loadedBook) return;
-
+  private async handleFootnoteRequest(msg: { href: string; requestId: string }, book: LoadedBookState): Promise<void> {
     try {
       const parts = msg.href.split('#');
       const filePart = parts[0];
@@ -532,13 +632,13 @@ export class SidecarServer {
         return;
       }
 
-      let targetPath = this.loadedBook.currentChapterPath;
+      let targetPath = book.currentChapterPath;
       if (filePart) {
         const decoded = decodeURIComponent(filePart);
-        targetPath = path.resolve(path.dirname(this.loadedBook.currentChapterPath), decoded);
+        targetPath = path.resolve(path.dirname(book.currentChapterPath), decoded);
       }
 
-      if (!this.isSafePath(this.loadedBook.bookRootDir, targetPath)) {
+      if (!this.isSafePath(book.bookRootDir, targetPath)) {
         this.lastFootnoteResponse = { requestId: msg.requestId, error: 'Path traversal blocked' };
         return;
       }
@@ -551,25 +651,70 @@ export class SidecarServer {
         return;
       }
 
-      const rewritten = await this.rewriteAssets(extracted, path.dirname(targetPath), this.loadedBook.bookRootDir);
+      const rewritten = await this.rewriteAssets(extracted, path.dirname(targetPath), book.bookRootDir);
       this.lastFootnoteResponse = { requestId: msg.requestId, html: rewritten };
     } catch (err) {
       this.lastFootnoteResponse = { requestId: msg.requestId, error: String(err) };
     }
   }
 
-  private async serveAsset(assetRelPath: string, res: http.ServerResponse): Promise<void> {
-    if (!this.loadedBook) {
+  private async serveLogo(res: http.ServerResponse): Promise<void> {
+    const candidatePaths = [
+      path.resolve(__dirname, '../assets/logo.png'),
+      path.resolve(__dirname, '../plugin/assets/logo.png'),
+      path.resolve(__dirname, '../media/icon.png'),
+      path.resolve(process.cwd(), 'plugin/assets/logo.png'),
+      path.resolve(process.cwd(), 'media/icon.png')
+    ];
+
+    for (const p of candidatePaths) {
+      try {
+        await fsp.access(p, fs.constants.R_OK);
+        const stat = await fsp.stat(p);
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Content-Length': stat.size,
+          'Cache-Control': 'public, max-age=86400'
+        });
+        fs.createReadStream(p).pipe(res);
+        return;
+      } catch {
+        // try next candidate path
+      }
+    }
+
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Logo Not Found');
+  }
+
+  private async serveAsset(assetRelPath: string, res: http.ServerResponse, req?: http.IncomingMessage): Promise<void> {
+    const rawUrl = req?.url || '';
+    const parsed = new URL(rawUrl, `http://${this.host}:${this.port}`);
+    const wsHint = parsed.searchParams.get('workspace') || undefined;
+    let book = this.getLoadedBook(wsHint);
+
+    if (!book) {
+      const decodedRel = decodeURIComponent(assetRelPath);
+      for (const b of this.loadedBooks.values()) {
+        const fullCandidate = path.resolve(b.bookRootDir, decodedRel);
+        if (fs.existsSync(fullCandidate)) {
+          book = b;
+          break;
+        }
+      }
+    }
+
+    if (!book) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('No book loaded');
       return;
     }
 
     const decoded = decodeURIComponent(assetRelPath);
-    const fullPath = path.resolve(this.loadedBook.bookRootDir, decoded);
+    const fullPath = path.resolve(book.bookRootDir, decoded);
 
     // Strict Path Traversal Guard
-    if (!this.isSafePath(this.loadedBook.bookRootDir, fullPath)) {
+    if (!this.isSafePath(book.bookRootDir, fullPath)) {
       res.writeHead(403, { 'Content-Type': 'text/plain' });
       res.end('Forbidden: Access outside book directory is blocked');
       return;
@@ -599,47 +744,1177 @@ export class SidecarServer {
     }
   }
 
-  private async serveReaderUi(_req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    const preferences = this.stateManager.getPreferences();
+  private async handleUploadApi(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    try {
+      const fileNameHeader = req.headers['x-file-name'];
+      let fileName = 'uploaded.epub';
+      if (typeof fileNameHeader === 'string' && fileNameHeader.trim()) {
+        fileName = path.basename(decodeURIComponent(fileNameHeader));
+      }
 
-    if (!this.loadedBook) {
+      const uploadDir = path.join(this.cacheDir, 'uploads');
+      await fsp.mkdir(uploadDir, { recursive: true });
+      const targetPath = path.join(uploadDir, fileName);
+
+      const writeStream = fs.createWriteStream(targetPath);
+      await new Promise<void>((resolve, reject) => {
+        req.pipe(writeStream);
+        req.on('error', reject);
+        writeStream.on('finish', () => resolve());
+        writeStream.on('error', reject);
+      });
+
+      const book = await this.openBook(targetPath);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          title: book.title,
+          totalChapters: book.epubPackage?.spine.length ?? 1
+        })
+      );
+    } catch (err: any) {
+      console.error('[Sidecar] Upload error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message || String(err) }));
+    }
+  }
+
+  public uriToFsPath(uri: string): string {
+    if (!uri) return '';
+    try {
+      if (uri.startsWith('file://') || uri.startsWith('file:')) {
+        return fileURLToPath(uri);
+      }
+    } catch {
+      // fallback
+    }
+    return uri;
+  }
+
+  public normalizeWorkspaceKey(dirPath?: string): string {
+    if (!dirPath) {
+      const roots = this.resolveWorkspaceDirs();
+      if (roots.length > 0) {
+        return path.resolve(roots[0]).toLowerCase().replace(/\\/g, '/');
+      }
+      return 'default';
+    }
+    const fsPath = this.uriToFsPath(dirPath);
+    return path.resolve(fsPath).toLowerCase().replace(/\\/g, '/');
+  }
+
+  public findWorkspaceForPath(targetPath: string): string | undefined {
+    const normTarget = path.resolve(this.uriToFsPath(targetPath)).toLowerCase().replace(/\\/g, '/');
+    const knownRoots = this.resolveWorkspaceDirs();
+    for (const r of knownRoots) {
+      const normRoot = path.resolve(r).toLowerCase().replace(/\\/g, '/');
+      if (normTarget === normRoot || normTarget.startsWith(normRoot + '/')) {
+        return path.resolve(r);
+      }
+    }
+    return undefined;
+  }
+
+  public resolveTargetWorkspace(hint?: string): string {
+    if (hint) {
+      const fsPath = this.uriToFsPath(hint);
+      const found = this.findWorkspaceForPath(fsPath);
+      if (found) return found;
+      if (fs.existsSync(fsPath)) {
+        try {
+          const stat = fs.statSync(fsPath);
+          return stat.isDirectory() ? fsPath : path.dirname(fsPath);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    const roots = this.resolveWorkspaceDirs();
+    return roots.length > 0 ? roots[0] : process.cwd();
+  }
+
+  public sortWorkspaceFiles(
+    files: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>
+  ): Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }> {
+    return [...files].sort((a, b) => {
+      const isActualEpubA = a.fullPath.toLowerCase().endsWith('.epub');
+      const isActualEpubB = b.fullPath.toLowerCase().endsWith('.epub');
+      if (isActualEpubA && !isActualEpubB) return -1;
+      if (!isActualEpubA && isActualEpubB) return 1;
+
+      return a.relPath.localeCompare(b.relPath, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  public async scanWorkspaceDir(
+    workspaceDir: string
+  ): Promise<Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>> {
+    const root = path.resolve(workspaceDir);
+    if (!fs.existsSync(root)) return [];
+    const files = await this.scanWorkspaceFiles(root, 0, 3, root);
+    return this.sortWorkspaceFiles(files);
+  }
+
+  public resolveWorkspaceDirs(): string[] {
+    const dirs: string[] = [];
+    const seen = new Set<string>();
+
+    const addDir = (dirPath: string | undefined | null) => {
+      if (!dirPath) return;
+      try {
+        const resolved = path.resolve(dirPath);
+        if (fs.existsSync(resolved) && !seen.has(resolved)) {
+          seen.add(resolved);
+          dirs.push(resolved);
+        }
+      } catch {
+        // ignore invalid paths
+      }
+    };
+
+    // 1. Explicitly configured or dynamically pushed workspaceDirs
+    for (const d of this.workspaceDirs) {
+      addDir(d);
+    }
+
+    // 2. Discover from active Antigravity Project (~/.gemini/config/projects/<id>.json)
+    try {
+      const projectsDir = path.join(os.homedir(), '.gemini', 'config', 'projects');
+      if (fs.existsSync(projectsDir)) {
+        const activeProjectId = process.env.ANTIGRAVITY_PROJECT_ID;
+        let targetFiles: string[] = [];
+
+        if (activeProjectId) {
+          const directFile = path.join(projectsDir, `${activeProjectId}.json`);
+          if (fs.existsSync(directFile)) {
+            targetFiles.push(directFile);
+          }
+        }
+
+        // If no active project ID or file not found, check the most recently modified project
+        if (targetFiles.length === 0 && dirs.length === 0) {
+          const entries = fs.readdirSync(projectsDir, { withFileTypes: true });
+          const sorted = entries
+            .filter((e) => e.isFile() && e.name.endsWith('.json') && e.name !== 'outside-of-project.json')
+            .map((e) => {
+              const fullPath = path.join(projectsDir, e.name);
+              const mtime = fs.statSync(fullPath).mtimeMs;
+              return { fullPath, mtime };
+            })
+            .sort((a, b) => b.mtime - a.mtime);
+
+          if (sorted.length > 0) {
+            targetFiles.push(sorted[0].fullPath);
+          }
+        }
+
+        for (const filePath of targetFiles) {
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const data = JSON.parse(content);
+            const resources = data.projectResources?.resources;
+            if (Array.isArray(resources)) {
+              for (const r of resources) {
+                const folderUri = r.gitFolder?.folderUri || r.folder?.folderUri || r.folderUri;
+                if (typeof folderUri === 'string') {
+                  const localPath = this.uriToFsPath(folderUri);
+                  addDir(localPath);
+                }
+              }
+            }
+          } catch {
+            // ignore bad project json
+          }
+        }
+      }
+    } catch {
+      // ignore discovery error
+    }
+
+    // 3. Fallback to process.cwd() if nothing else found
+    if (dirs.length === 0) {
+      addDir(process.cwd());
+    }
+
+    return dirs;
+  }
+
+  public async scanAllWorkspaceFiles(): Promise<
+    Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>
+  > {
+    const root = this.resolveTargetWorkspace();
+    return this.scanWorkspaceDir(root);
+  }
+
+  private async scanWorkspaceFiles(
+    dir = process.cwd(),
+    depth = 0,
+    maxDepth = 3,
+    rootDir?: string
+  ): Promise<Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>> {
+    if (depth > maxDepth) return [];
+    const effectiveRoot = rootDir ?? dir;
+    try {
+      const entries = await fsp.readdir(dir, { withFileTypes: true });
+      const results: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }> = [];
+
+      for (const entry of entries) {
+        if (
+          entry.name.startsWith('.') ||
+          entry.name === 'node_modules' ||
+          entry.name === 'dist' ||
+          entry.name === 'tasks' ||
+          entry.name === 'coverage'
+        ) {
+          continue;
+        }
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          const sub = await this.scanWorkspaceFiles(fullPath, depth + 1, maxDepth, effectiveRoot);
+          results.push(...sub);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (['.epub', '.xhtml', '.html', '.htm'].includes(ext)) {
+            const relPath = path.relative(effectiveRoot, fullPath).replace(/\\/g, '/');
+            results.push({
+              fullPath,
+              relPath,
+              name: entry.name,
+              isEpub: ext === '.epub'
+            });
+          }
+        }
+      }
+      return results;
+    } catch {
+      return [];
+    }
+  }
+
+  private renderFilesHtml(
+    workspaceFiles: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>
+  ): string {
+    if (workspaceFiles.length > 0) {
+      const showSearch = workspaceFiles.length > 6;
+      const searchBoxHtml = showSearch
+        ? `
+        <div class="filter-box">
+          <svg class="filter-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="file-filter-input"
+            class="filter-input"
+            placeholder="Cari bab atau berkas... (${workspaceFiles.length} berkas)"
+            oninput="filterFiles(this.value)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>`
+        : '';
+
+      return `
+      <div class="workspace-section">
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Berkas di Workspace</span>
+          <span class="counter-chip">${workspaceFiles.length}</span>
+        </div>
+        ${searchBoxHtml}
+        <div class="file-list" id="files-list-inner">
+          ${workspaceFiles
+            .map(
+              (f) => `
+          <div class="file-item" role="button" tabindex="0" onclick="openFile('${this.escapeText(f.relPath).replace(/'/g, "\\'")}')" onkeydown="if(event.key==='Enter'||event.key===' ')openFile('${this.escapeText(f.relPath).replace(/'/g, "\\'")}')">
+            <span class="file-badge ${f.isEpub ? 'badge-epub' : 'badge-xhtml'}">
+              ${f.isEpub ? 'EPUB' : 'XHTML'}
+            </span>
+            <div class="file-info">
+              <span class="file-name">${this.escapeText(f.name)}</span>
+              <span class="file-path" title="${this.escapeText(f.relPath)}">${this.escapeText(f.relPath)}</span>
+            </div>
+            <div class="file-action-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          </div>`
+            )
+            .join('')}
+        </div>
+      </div>`;
+    }
+    return `
+      <div class="empty-tip">
+        <p>Tidak ada berkas .epub atau .xhtml di workspace saat ini.</p>
+      </div>`;
+  }
+
+  private escapeText(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  private async serveReaderUi(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    const preferences = this.stateManager.getPreferences();
+    const parsedUrl = new URL(req.url || '/', `http://${this.host}:${this.port}`);
+    const wsParam = parsedUrl.searchParams.get('workspace');
+    const wsPath = this.resolveTargetWorkspace(wsParam || undefined);
+    const wsKey = this.normalizeWorkspaceKey(wsPath);
+    const loadedBook =
+      this.loadedBooks.get(wsKey) ||
+      (this.loadedBooks.size === 1 && !wsParam ? this.loadedBooks.values().next().value : undefined);
+
+    if (!loadedBook) {
+      const workspaceFiles = await this.scanWorkspaceDir(wsPath);
+      const filesListHtml = this.renderFilesHtml(workspaceFiles);
+
       // Empty state
       const emptyHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>XHTML Reader Previewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XHTML & EPUB Reader</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    ::selection { background: rgba(147, 197, 253, 0.25); color: #ffffff; }
+
+    :root {
+      --bg-canvas: #0a0e17;
+      --bg-surface: #111827;
+      --bg-inset: #131722;
+      --border-subtle: #1f2937;
+      --border-muted: #172033;
+      --border-hover: #374151;
+      --border-accent: #93c5fd;
+      --text-primary: #f3f4f6;
+      --text-secondary: #e5e7eb;
+      --text-muted: #9ca3af;
+      --accent-blue: #93c5fd;
+      --btn-bg: #1f2937;
+      --btn-hover: #263348;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      margin: 0; padding: 2rem;
-      background: #111827; color: #f3f4f6;
-      font-family: system-ui, -apple-system, sans-serif;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: 80vh; text-align: center;
+      background-color: var(--bg-canvas);
+      background-image: radial-gradient(circle, #1e293b 1.5px, transparent 1.5px);
+      background-size: 28px 28px;
+      color: var(--text-secondary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1.5rem 1rem;
+      box-sizing: border-box;
+      overflow-y: auto;
+      -webkit-font-smoothing: antialiased;
     }
+
+    .shell {
+      width: 100%;
+      max-width: 440px;
+      margin: auto;
+    }
+
     .card {
-      background: #1f2937; border: 1px solid #374151; border-radius: 12px;
-      padding: 2.5rem; max-width: 440px; box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 0;
+      padding: 1.75rem 1.5rem;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
     }
-    h1 { font-size: 1.4rem; margin-bottom: 0.75rem; color: #60a5fa; }
-    p { font-size: 0.95rem; color: #9ca3af; line-height: 1.5; margin-bottom: 1.5rem; }
+
+    /* Branded Header */
+    .card-header {
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .brand-logo-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .brand-logo-img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      border-radius: 0;
+      filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.6));
+    }
+
+    h1 {
+      font-size: 1.15rem;
+      margin: 0 0 0.35rem;
+      color: var(--text-primary);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-lead {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    .brand-sub {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin: 0.2rem 0 0;
+      line-height: 1.35;
+    }
+
+    /* Workspace Section */
+    .workspace-section {
+      margin-bottom: 0.75rem;
+    }
+
+    .section-title {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .counter-chip {
+      background-color: var(--btn-bg);
+      border: 1px solid var(--border-subtle);
+      color: var(--accent-blue);
+      font-size: 0.62rem;
+      padding: 0.08rem 0.38rem;
+      border-radius: 0;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+
+    /* Filter Search Box */
+    .filter-box {
+      display: flex;
+      align-items: center;
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-subtle);
+      border-radius: 0;
+      padding: 0.35rem 0.6rem;
+      gap: 0.45rem;
+      margin-bottom: 0.55rem;
+      transition: border-color 0.15s;
+    }
+
+    .filter-box:focus-within {
+      border-color: var(--border-accent);
+    }
+
+    .filter-icon {
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .filter-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 0.74rem;
+      font-family: inherit;
+    }
+
+    .filter-input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+
+    .file-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      max-height: 230px;
+      overflow-y: auto;
+      padding-right: 0.2rem;
+    }
+
+    .file-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    .file-list::-webkit-scrollbar-thumb {
+      background-color: var(--border-subtle);
+      border-radius: 0;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-muted);
+      border-radius: 0;
+      padding: 0.52rem 0.75rem;
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
+    }
+
+    .file-item:hover {
+      border-color: var(--border-hover);
+      background-color: #182030;
+    }
+
+    .file-item:focus-visible {
+      border-color: var(--border-accent);
+    }
+
+    .file-item:active {
+      background-color: #141c2c;
+    }
+
+    .file-badge {
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      padding: 0.18rem 0.42rem;
+      border-radius: 0;
+      flex-shrink: 0;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      line-height: 1;
+      text-transform: uppercase;
+      background-color: rgba(147, 197, 253, 0.08);
+      border: 1px solid rgba(147, 197, 253, 0.22);
+      color: var(--accent-blue);
+      transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+    }
+
+    .file-item:hover .file-badge {
+      border-color: var(--border-accent);
+      color: #ffffff;
+      background-color: rgba(147, 197, 253, 0.18);
+    }
+
+    .badge-epub,
+    .badge-xhtml {
+      background-color: rgba(147, 197, 253, 0.08);
+      border: 1px solid rgba(147, 197, 253, 0.22);
+      color: var(--accent-blue);
+    }
+
+    .file-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+      text-align: left;
+    }
+
+    .file-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-path {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+
+    .file-action-icon {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.35;
+      transform: translateX(0);
+      transition: opacity 0.12s ease, transform 0.12s ease, color 0.12s ease;
+      flex-shrink: 0;
+      margin-left: 0.25rem;
+    }
+
+    .file-item:hover .file-action-icon {
+      opacity: 1;
+      color: var(--accent-blue);
+      transform: translateX(2px);
+    }
+
+    .empty-tip {
+      padding: 0.75rem;
+      text-align: center;
+      border-radius: 0;
+      background-color: var(--bg-inset);
+      border: 1px dashed var(--border-subtle);
+      margin-bottom: 0.75rem;
+    }
+    .empty-tip p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
+    /* Divider */
+    .divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.65rem;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      margin: 0.8rem 0;
+    }
+
+    .divider-line {
+      flex: 1;
+      height: 1px;
+      background-color: var(--border-muted);
+    }
+
+    .divider-text {
+      padding: 0 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      opacity: 0.75;
+    }
+
+    /* Dropzone Upload Button */
+    .dropzone {
+      border: 1px dashed var(--border-hover);
+      border-radius: 0;
+      padding: 0.75rem 0.9rem;
+      background-color: var(--bg-inset);
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      cursor: pointer;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
+      margin-bottom: 0.65rem;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--border-accent);
+      background-color: #182030;
+    }
+
+    .dropzone-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 0;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-blue);
+      flex-shrink: 0;
+    }
+
+    .dropzone-meta {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+      min-width: 0;
+    }
+
+    .dropzone-primary {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .dropzone-secondary {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      margin-top: 0.1rem;
+    }
+
+    /* Manual Path Input Bar */
+    .path-bar {
+      display: flex;
+      align-items: center;
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-subtle);
+      border-radius: 0;
+      padding: 0.25rem 0.35rem 0.25rem 0.65rem;
+      gap: 0.45rem;
+      margin-bottom: 0.75rem;
+      transition: border-color 0.12s ease, background-color 0.12s ease;
+    }
+
+    .path-bar:focus-within {
+      border-color: var(--border-accent);
+      background-color: #161d2d;
+    }
+
+    .path-bar-icon {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .path-input {
+      flex: 1;
+      background-color: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.76rem;
+      outline: none;
+      min-width: 0;
+      font-family: inherit;
+    }
+
+    .path-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .path-submit-btn {
+      background-color: var(--btn-bg);
+      border: 1px solid var(--border-subtle);
+      color: var(--accent-blue);
+      border-radius: 0;
+      padding: 0.32rem 0.5rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+    }
+
+    .path-submit-btn:hover {
+      background-color: #2563eb;
+      border-color: #3b82f6;
+      color: #ffffff;
+    }
+
+    /* Footnote / Agent Command Badge */
     .badge {
-      display: inline-block; background: #374151; color: #e5e7eb;
-      padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.8rem; font-weight: 500;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.25rem 0.5rem 0;
+      font-size: 0.7rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      text-align: center;
+      font-family: ui-monospace, SFMono-Regular, monospace;
     }
-    code { background: #111827; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.85rem; color: #93c5fd; }
+
+    .badge code {
+      color: var(--accent-blue);
+      font-family: inherit;
+      font-size: 0.68rem;
+      background: var(--bg-inset);
+      padding: 0.1rem 0.35rem;
+      border-radius: 0;
+      border: 1px solid var(--border-subtle);
+    }
   </style>
   <script>
-    const evtSource = new EventSource('/api/events');
-    evtSource.addEventListener('bookLoaded', () => { location.reload(); });
+    let currentWorkspace = ${JSON.stringify(wsPath)};
+    let allWorkspaceFiles = ${JSON.stringify(
+      workspaceFiles.map((f) => ({
+        fullPath: f.fullPath,
+        relPath: f.relPath,
+        name: f.name,
+        isEpub: f.isEpub
+      }))
+    )};
+
+    function sortFiles(files) {
+      return [...files].sort((a, b) => {
+        const isActualEpubA = a.fullPath.toLowerCase().endsWith('.epub');
+        const isActualEpubB = b.fullPath.toLowerCase().endsWith('.epub');
+        if (isActualEpubA && !isActualEpubB) return -1;
+        if (!isActualEpubA && isActualEpubB) return 1;
+        return a.relPath.localeCompare(b.relPath, undefined, { numeric: true, sensitivity: 'base' });
+      });
+    }
+
+    function renderFileListItemsOnly(files) {
+      const container = document.getElementById('files-list-inner');
+      if (!container) return;
+      if (!files || files.length === 0) {
+        container.innerHTML = '<div style="padding:0.75rem;text-align:center;color:var(--text-muted);font-size:0.75rem;">Tidak ada berkas yang cocok dengan pencarian.</div>';
+        return;
+      }
+      container.innerHTML = files
+        .map(
+          (f) =>
+            '<div class="file-item" role="button" tabindex="0" onclick="openFile(\\'' + escapeHtml(f.relPath).replace(/'/g, "\\\\'") + '\\')" onkeydown="if(event.key===\\'Enter\\'||event.key===\\' \\')openFile(\\'' + escapeHtml(f.relPath).replace(/'/g, "\\\\'") + '\\')">' +
+              '<span class="file-badge ' + (f.isEpub ? 'badge-epub' : 'badge-xhtml') + '">' +
+                (f.isEpub ? 'EPUB' : 'XHTML') +
+              '</span>' +
+              '<div class="file-info">' +
+                '<span class="file-name">' + escapeHtml(f.name) + '</span>' +
+                '<span class="file-path" title="' + escapeHtml(f.relPath) + '">' + escapeHtml(f.relPath) + '</span>' +
+              '</div>' +
+              '<div class="file-action-icon" aria-hidden="true">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+                  '<polyline points="9 18 15 12 9 6"></polyline>' +
+                '</svg>' +
+              '</div>' +
+            '</div>'
+        )
+        .join('');
+    }
+
+    function filterFiles(query) {
+      const q = (query || '').toLowerCase().trim();
+      if (!q) {
+        renderFileListItemsOnly(allWorkspaceFiles);
+        return;
+      }
+      const filtered = allWorkspaceFiles.filter(
+        (f) => f.name.toLowerCase().includes(q) || f.relPath.toLowerCase().includes(q)
+      );
+      renderFileListItemsOnly(filtered);
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryWs = urlParams.get('workspace');
+    if (queryWs) {
+      currentWorkspace = queryWs;
+      sessionStorage.setItem('xhtml_reader_workspace', currentWorkspace);
+    } else {
+      const stored = sessionStorage.getItem('xhtml_reader_workspace');
+      if (stored) {
+        currentWorkspace = stored;
+      }
+    }
+
+    const sseWsUrl = currentWorkspace ? '/api/events?workspace=' + encodeURIComponent(currentWorkspace) : '/api/events';
+    const evtSource = new EventSource(sseWsUrl);
+    evtSource.addEventListener('bookLoaded', (e) => {
+      try {
+        const d = JSON.parse(e.data || '{}');
+        if (!d.workspace || !currentWorkspace || d.workspace.toLowerCase() === currentWorkspace.toLowerCase()) {
+          location.reload();
+        }
+      } catch {
+        location.reload();
+      }
+    });
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function openFile(filePath) {
+      try {
+        const res = await fetch('/api/open', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath, workspace: currentWorkspace })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const ws = data.workspace || currentWorkspace;
+          if (ws) {
+            sessionStorage.setItem('xhtml_reader_workspace', ws);
+            location.href = '/?workspace=' + encodeURIComponent(ws);
+          } else {
+            location.reload();
+          }
+        } else {
+          alert(data.error || 'Gagal membuka berkas');
+        }
+      } catch (err) {
+        alert('Gagal menghubungi server: ' + err.message);
+      }
+    }
+
+    function renderWorkspaceFiles(files) {
+      const container = document.getElementById('workspace-files-container');
+      if (!container) return;
+      allWorkspaceFiles = sortFiles(files || []);
+      if (allWorkspaceFiles.length === 0) {
+        container.innerHTML = '<div class="empty-tip"><p>Tidak ada berkas .epub atau .xhtml di workspace saat ini.</p></div>';
+        return;
+      }
+      const showSearch = allWorkspaceFiles.length > 6;
+      const searchBoxHtml = showSearch
+        ? '<div class="filter-box">' +
+            '<svg class="filter-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<circle cx="11" cy="11" r="8"></circle>' +
+              '<line x1="21" y1="21" x2="16.65" y2="16.65"></line>' +
+            '</svg>' +
+            '<input type="text" id="file-filter-input" class="filter-input" placeholder="Cari bab atau berkas... (' + allWorkspaceFiles.length + ' berkas)" oninput="filterFiles(this.value)" autocomplete="off" spellcheck="false" />' +
+          '</div>'
+        : '';
+
+      const items = allWorkspaceFiles
+        .map(
+          (f) =>
+            '<div class="file-item" role="button" tabindex="0" onclick="openFile(\\'' + escapeHtml(f.relPath).replace(/'/g, "\\\\'") + '\\')" onkeydown="if(event.key===\\'Enter\\'||event.key===\\' \\')openFile(\\'' + escapeHtml(f.relPath).replace(/'/g, "\\\\'") + '\\')">' +
+              '<span class="file-badge ' + (f.isEpub ? 'badge-epub' : 'badge-xhtml') + '">' +
+                (f.isEpub ? 'EPUB' : 'XHTML') +
+              '</span>' +
+              '<div class="file-info">' +
+                '<span class="file-name">' + escapeHtml(f.name) + '</span>' +
+                '<span class="file-path" title="' + escapeHtml(f.relPath) + '">' + escapeHtml(f.relPath) + '</span>' +
+              '</div>' +
+              '<div class="file-action-icon" aria-hidden="true">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+                  '<polyline points="9 18 15 12 9 6"></polyline>' +
+                '</svg>' +
+              '</div>' +
+            '</div>'
+        )
+        .join('');
+
+      container.innerHTML =
+        '<div class="workspace-section">' +
+          '<div class="section-title">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>' +
+            '</svg>' +
+            '<span>Berkas di Workspace</span>' +
+            '<span class="counter-chip">' + allWorkspaceFiles.length + '</span>' +
+          '</div>' +
+          searchBoxHtml +
+          '<div class="file-list" id="files-list-inner">' +
+            items +
+          '</div>' +
+        '</div>';
+    }
+
+    async function loadWorkspaceFiles(ws) {
+      const targetWs = ws || currentWorkspace;
+      const url = targetWs
+        ? '/api/workspace-files?workspace=' + encodeURIComponent(targetWs)
+        : '/api/workspace-files';
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data && data.workspace) {
+          currentWorkspace = data.workspace;
+          sessionStorage.setItem('xhtml_reader_workspace', currentWorkspace);
+        }
+        if (data && Array.isArray(data.files)) {
+          renderWorkspaceFiles(data.files);
+        }
+      } catch (err) {
+        console.error('Failed to load workspace files:', err);
+      }
+    }
+
+    async function handleManualOpen(e) {
+      e.preventDefault();
+      const input = document.getElementById('manual-path-input');
+      const val = input.value.trim();
+      if (val) {
+        await openFile(val);
+      }
+    }
+
+    async function uploadFile(file) {
+      if (!file) return;
+      const label = document.getElementById('dropzone-label');
+      if (label) label.textContent = 'Memuat ' + file.name + '...';
+
+      try {
+        const url = currentWorkspace
+          ? '/api/upload?workspace=' + encodeURIComponent(currentWorkspace)
+          : '/api/upload';
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-File-Name': encodeURIComponent(file.name)
+          },
+          body: file
+        });
+        const data = await res.json();
+        if (data.success) {
+          const ws = data.workspace || currentWorkspace;
+          if (ws) {
+            sessionStorage.setItem('xhtml_reader_workspace', ws);
+            location.href = '/?workspace=' + encodeURIComponent(ws);
+          } else {
+            location.reload();
+          }
+        } else {
+          alert(data.error || 'Gagal mengunggah berkas');
+          if (label) label.textContent = 'Pilih Berkas dari Komputer';
+        }
+      } catch (err) {
+        alert('Upload gagal: ' + err.message);
+        if (label) label.textContent = 'Pilih Berkas dari Komputer';
+      }
+    }
+
+    function handleFileUpload(input) {
+      if (!input.files || !input.files[0]) return;
+      uploadFile(input.files[0]);
+    }
+
+    // Host workspace changes listener
+    window.addEventListener('message', async (event) => {
+      if (event.data && event.data.type === 'workspace-change') {
+        const uris = event.data.payload && event.data.payload.workspaceUris;
+        if (Array.isArray(uris) && uris.length > 0) {
+          try {
+            const res = await fetch('/api/set-workspace', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ workspaceUris: uris })
+            });
+            const data = await res.json();
+            if (data && data.workspace) {
+              const previousWs = currentWorkspace;
+              currentWorkspace = data.workspace;
+              sessionStorage.setItem('xhtml_reader_workspace', currentWorkspace);
+
+              if (previousWs && previousWs.toLowerCase() !== currentWorkspace.toLowerCase()) {
+                const statusRes = await fetch('/api/status?workspace=' + encodeURIComponent(currentWorkspace));
+                const statusData = await statusRes.json();
+                if (statusData && statusData.loaded) {
+                  location.replace('/?workspace=' + encodeURIComponent(currentWorkspace));
+                  return;
+                }
+              }
+            }
+            if (data && Array.isArray(data.files)) {
+              renderWorkspaceFiles(data.files);
+            }
+          } catch (err) {
+            console.error('Failed to sync workspace:', err);
+          }
+        }
+      }
+    });
+
+    // Drag and Drop & Initial load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadWorkspaceFiles(currentWorkspace);
+
+      const dropzone = document.getElementById('dropzone');
+      if (!dropzone) return;
+
+      ['dragenter', 'dragover'].forEach(name => {
+        window.addEventListener(name, (e) => {
+          e.preventDefault();
+          dropzone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'dragend'].forEach(name => {
+        window.addEventListener(name, (e) => {
+          if (!e.relatedTarget) {
+            dropzone.classList.remove('dragover');
+          }
+        });
+      });
+
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          uploadFile(e.dataTransfer.files[0]);
+        }
+      });
+    });
   </script>
 </head>
 <body>
-  <div class="card">
-    <div style="font-size: 2.5rem; margin-bottom: 1rem;">📖</div>
-    <h1>XHTML & EPUB Reader</h1>
-    <p>Belum ada buku atau berkas XHTML yang dimuat ke dalam Auxiliary Pane.</p>
-    <div class="badge">Gunakan perintah Agent atau panggil <code>/api/open</code></div>
+  <div class="shell">
+    <div class="card">
+      <div class="card-header">
+        <div class="brand-logo-wrap">
+          <img src="/logo.png" alt="XHTML Reader" class="brand-logo-img" width="48" height="48" />
+        </div>
+        <h1>XHTML & EPUB Reader</h1>
+        <p class="brand-lead">Belum ada buku atau berkas XHTML yang dimuat.</p>
+        <p class="brand-sub">Pilih naskah di bawah atau unggah berkas untuk mulai membaca.</p>
+      </div>
+
+      <div id="workspace-files-container">${filesListHtml}</div>
+
+      <div class="divider">
+        <span class="divider-line"></span>
+        <span class="divider-text">atau</span>
+        <span class="divider-line"></span>
+      </div>
+
+      <!-- Pilih Berkas dari Komputer / Dropzone -->
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-picker').click()">
+        <input type="file" id="file-picker" accept=".epub,.xhtml,.html,.htm" style="display:none" onchange="handleFileUpload(this)">
+        <div class="dropzone-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
+        <div class="dropzone-meta">
+          <span class="dropzone-primary" id="dropzone-label">Pilih Berkas dari Komputer</span>
+          <span class="dropzone-secondary">atau seret dan lepas (.epub, .xhtml) ke panel ini</span>
+        </div>
+      </div>
+
+      <!-- Manual Path Input Form -->
+      <form onsubmit="handleManualOpen(event)" class="path-bar">
+        <div class="path-bar-icon" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+        </div>
+        <input type="text" id="manual-path-input" class="path-input" placeholder="Ketik atau tempel path berkas..." required autocomplete="off" spellcheck="false" />
+        <button type="submit" class="path-submit-btn" title="Buka berkas">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </form>
+
+      <div class="badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="4 17 10 11 4 5"></polyline>
+          <line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+        <span>Gunakan perintah Agent atau panggil <code>/api/open</code></span>
+      </div>
+    </div>
   </div>
 </body>
 </html>`;
@@ -649,52 +1924,52 @@ export class SidecarServer {
     }
 
     try {
-      const chapterContentRaw = await fsp.readFile(this.loadedBook.currentChapterPath, 'utf-8');
+      const chapterContentRaw = await fsp.readFile(loadedBook.currentChapterPath, 'utf-8');
       const sanitized = sanitizeXhtml(chapterContentRaw);
-      const chapterDir = path.dirname(this.loadedBook.currentChapterPath);
-      const rewrittenContent = await this.rewriteAssets(sanitized, chapterDir, this.loadedBook.bookRootDir);
+      const chapterDir = path.dirname(loadedBook.currentChapterPath);
+      const rewrittenContent = await this.rewriteAssets(sanitized, chapterDir, loadedBook.bookRootDir);
 
-      const tocItems: ReaderTocItem[] | undefined = this.loadedBook.epubPackage?.toc.map((t) => ({
+      const tocItems: ReaderTocItem[] | undefined = loadedBook.epubPackage?.toc.map((t) => ({
         label: t.label,
         href: t.href,
-        active: t.href.includes(path.basename(this.loadedBook!.currentChapterPath))
+        active: t.href.includes(path.basename(loadedBook.currentChapterPath))
       }));
 
       const navInfo: ReaderNavInfo = {
-        hasPrev: this.loadedBook.isEpub ? this.loadedBook.currentSpineIndex > 0 : false,
-        hasNext: this.loadedBook.isEpub
-          ? this.loadedBook.currentSpineIndex < (this.loadedBook.epubPackage?.spine.length ?? 1) - 1
+        hasPrev: loadedBook.isEpub ? loadedBook.currentSpineIndex > 0 : false,
+        hasNext: loadedBook.isEpub
+          ? loadedBook.currentSpineIndex < (loadedBook.epubPackage?.spine.length ?? 1) - 1
           : false,
-        bookTitle: this.loadedBook.title,
-        chapterIndex: this.loadedBook.currentSpineIndex + 1,
-        totalChapters: this.loadedBook.epubPackage?.spine.length ?? 1,
-        currentFileName: path.basename(this.loadedBook.currentChapterPath),
+        bookTitle: loadedBook.title,
+        chapterIndex: loadedBook.currentSpineIndex + 1,
+        totalChapters: loadedBook.epubPackage?.spine.length ?? 1,
+        currentFileName: path.basename(loadedBook.currentChapterPath),
         isLinear: true,
         toc: tocItems
       };
 
-      if (this.loadedBook.epubPackage) {
-        navInfo.spineItems = this.loadedBook.epubPackage.spine.map((sp, idx) => ({
+      if (loadedBook.epubPackage) {
+        navInfo.spineItems = loadedBook.epubPackage.spine.map((sp, idx) => ({
           index: idx + 1,
           idref: sp.idref,
           href: sp.href,
           fileName: path.basename(sp.href),
           linear: sp.linear !== false,
-          active: idx === this.loadedBook!.currentSpineIndex
+          active: idx === loadedBook.currentSpineIndex
         }));
       }
 
-      const initialLocation = this.stateManager.getReadingLocation(this.loadedBook.currentChapterPath);
+      const initialLocation = this.stateManager.getReadingLocation(loadedBook.currentChapterPath);
 
-      const resetToTop = Boolean(this.loadedBook.resetToTop);
-      const startAtBottom = Boolean(this.loadedBook.startAtBottom);
-      this.loadedBook.resetToTop = false;
-      this.loadedBook.startAtBottom = false;
+      const resetToTop = Boolean(loadedBook.resetToTop);
+      const startAtBottom = Boolean(loadedBook.startAtBottom);
+      loadedBook.resetToTop = false;
+      loadedBook.startAtBottom = false;
 
       const html = readerShell(
         rewrittenContent,
-        this.loadedBook.currentChapterPath,
-        this.loadedBook.currentFragment,
+        loadedBook.currentChapterPath,
+        loadedBook.currentFragment,
         { cspSource: `http://${this.host}:*` },
         navInfo,
         preferences,
@@ -703,8 +1978,13 @@ export class SidecarServer {
         startAtBottom
       );
 
+      const injectedHtml = html.replace(
+        '<script nonce=',
+        `<script>window.__XHTML_WORKSPACE__ = ${JSON.stringify(wsPath)};</script><script nonce=`
+      );
+
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(html);
+      res.end(injectedHtml);
     } catch (err) {
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       res.end(`Error rendering reader UI: ${String(err)}`);
