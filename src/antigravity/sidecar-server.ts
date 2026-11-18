@@ -834,12 +834,26 @@ export class SidecarServer {
     return roots.length > 0 ? roots[0] : process.cwd();
   }
 
+  public sortWorkspaceFiles(
+    files: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>
+  ): Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }> {
+    return [...files].sort((a, b) => {
+      const isActualEpubA = a.fullPath.toLowerCase().endsWith('.epub');
+      const isActualEpubB = b.fullPath.toLowerCase().endsWith('.epub');
+      if (isActualEpubA && !isActualEpubB) return -1;
+      if (!isActualEpubA && isActualEpubB) return 1;
+
+      return a.relPath.localeCompare(b.relPath, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
   public async scanWorkspaceDir(
     workspaceDir: string
   ): Promise<Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>> {
     const root = path.resolve(workspaceDir);
     if (!fs.existsSync(root)) return [];
-    return this.scanWorkspaceFiles(root, 0, 3, root);
+    const files = await this.scanWorkspaceFiles(root, 0, 3, root);
+    return this.sortWorkspaceFiles(files);
   }
 
   public resolveWorkspaceDirs(): string[] {
@@ -967,7 +981,7 @@ export class SidecarServer {
               fullPath,
               relPath,
               name: entry.name,
-              isEpub: ext === '.epub' || fullPath.includes('OEBPS') || fullPath.includes('EPUB')
+              isEpub: ext === '.epub'
             });
           }
         }
@@ -982,6 +996,26 @@ export class SidecarServer {
     workspaceFiles: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>
   ): string {
     if (workspaceFiles.length > 0) {
+      const showSearch = workspaceFiles.length > 6;
+      const searchBoxHtml = showSearch
+        ? `
+        <div class="filter-box">
+          <svg class="filter-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="file-filter-input"
+            class="filter-input"
+            placeholder="Cari bab atau berkas... (${workspaceFiles.length} berkas)"
+            oninput="filterFiles(this.value)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>`
+        : '';
+
       return `
       <div class="workspace-section">
         <div class="section-title">
@@ -991,7 +1025,8 @@ export class SidecarServer {
           <span>Berkas di Workspace</span>
           <span class="counter-chip">${workspaceFiles.length}</span>
         </div>
-        <div class="file-list">
+        ${searchBoxHtml}
+        <div class="file-list" id="files-list-inner">
           ${workspaceFiles
             .map(
               (f) => `
@@ -1175,11 +1210,49 @@ export class SidecarServer {
       font-family: ui-monospace, SFMono-Regular, monospace;
     }
 
+    /* Filter Search Box */
+    .filter-box {
+      display: flex;
+      align-items: center;
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.35rem 0.6rem;
+      gap: 0.45rem;
+      margin-bottom: 0.55rem;
+      transition: border-color 0.15s, background-color 0.15s;
+    }
+
+    .filter-box:focus-within {
+      border-color: var(--border-hover);
+      background-color: #11161d;
+    }
+
+    .filter-icon {
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .filter-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 0.74rem;
+      font-family: inherit;
+    }
+
+    .filter-input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+
     .file-list {
       display: flex;
       flex-direction: column;
       gap: 0.4rem;
-      max-height: 200px;
+      max-height: 230px;
       overflow-y: auto;
       padding-right: 0.2rem;
     }
@@ -1445,6 +1518,66 @@ export class SidecarServer {
   </style>
   <script>
     let currentWorkspace = ${JSON.stringify(wsPath)};
+    let allWorkspaceFiles = ${JSON.stringify(
+      workspaceFiles.map((f) => ({
+        fullPath: f.fullPath,
+        relPath: f.relPath,
+        name: f.name,
+        isEpub: f.isEpub
+      }))
+    )};
+
+    function sortFiles(files) {
+      return [...files].sort((a, b) => {
+        const isActualEpubA = a.fullPath.toLowerCase().endsWith('.epub');
+        const isActualEpubB = b.fullPath.toLowerCase().endsWith('.epub');
+        if (isActualEpubA && !isActualEpubB) return -1;
+        if (!isActualEpubA && isActualEpubB) return 1;
+        return a.relPath.localeCompare(b.relPath, undefined, { numeric: true, sensitivity: 'base' });
+      });
+    }
+
+    function renderFileListItemsOnly(files) {
+      const container = document.getElementById('files-list-inner');
+      if (!container) return;
+      if (!files || files.length === 0) {
+        container.innerHTML = '<div style="padding:0.75rem;text-align:center;color:var(--text-muted);font-size:0.75rem;">Tidak ada berkas yang cocok dengan pencarian.</div>';
+        return;
+      }
+      container.innerHTML = files
+        .map(
+          (f) =>
+            '<div class="file-item">' +
+              '<span class="file-badge ' + (f.isEpub ? 'badge-epub' : 'badge-xhtml') + '">' +
+                (f.isEpub ? 'EPUB' : 'XHTML') +
+              '</span>' +
+              '<div class="file-info">' +
+                '<span class="file-name">' + escapeHtml(f.name) + '</span>' +
+                '<span class="file-path" title="' + escapeHtml(f.relPath) + '">' + escapeHtml(f.relPath) + '</span>' +
+              '</div>' +
+              '<button type="button" class="btn-open" onclick="openFile(\\'' + escapeHtml(f.relPath).replace(/'/g, "\\\\'") + '\\')">' +
+                '<span>Buka</span>' +
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<line x1="5" y1="12" x2="19" y2="12"></line>' +
+                  '<polyline points="12 5 19 12 12 19"></polyline>' +
+                '</svg>' +
+              '</button>' +
+            '</div>'
+        )
+        .join('');
+    }
+
+    function filterFiles(query) {
+      const q = (query || '').toLowerCase().trim();
+      if (!q) {
+        renderFileListItemsOnly(allWorkspaceFiles);
+        return;
+      }
+      const filtered = allWorkspaceFiles.filter(
+        (f) => f.name.toLowerCase().includes(q) || f.relPath.toLowerCase().includes(q)
+      );
+      renderFileListItemsOnly(filtered);
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
     const queryWs = urlParams.get('workspace');
@@ -1507,11 +1640,23 @@ export class SidecarServer {
     function renderWorkspaceFiles(files) {
       const container = document.getElementById('workspace-files-container');
       if (!container) return;
-      if (!files || files.length === 0) {
+      allWorkspaceFiles = sortFiles(files || []);
+      if (allWorkspaceFiles.length === 0) {
         container.innerHTML = '<div class="empty-tip"><p>Tidak ada berkas .epub atau .xhtml di workspace saat ini.</p></div>';
         return;
       }
-      const items = files
+      const showSearch = allWorkspaceFiles.length > 6;
+      const searchBoxHtml = showSearch
+        ? '<div class="filter-box">' +
+            '<svg class="filter-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<circle cx="11" cy="11" r="8"></circle>' +
+              '<line x1="21" y1="21" x2="16.65" y2="16.65"></line>' +
+            '</svg>' +
+            '<input type="text" id="file-filter-input" class="filter-input" placeholder="Cari bab atau berkas... (' + allWorkspaceFiles.length + ' berkas)" oninput="filterFiles(this.value)" autocomplete="off" spellcheck="false" />' +
+          '</div>'
+        : '';
+
+      const items = allWorkspaceFiles
         .map(
           (f) =>
             '<div class="file-item">' +
@@ -1540,9 +1685,10 @@ export class SidecarServer {
               '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>' +
             '</svg>' +
             '<span>Berkas di Workspace</span>' +
-            '<span class="counter-chip">' + files.length + '</span>' +
+            '<span class="counter-chip">' + allWorkspaceFiles.length + '</span>' +
           '</div>' +
-          '<div class="file-list">' +
+          searchBoxHtml +
+          '<div class="file-list" id="files-list-inner">' +
             items +
           '</div>' +
         '</div>';
