@@ -70,6 +70,7 @@ export class SidecarServer {
   private server: http.Server | undefined;
   private sseClients = new Set<http.ServerResponse>();
   private cacheManager: EpubCacheManager;
+  private cacheDir: string;
   private stateManager: StateManager;
   private navigationHistory = new NavigationHistory();
   private loadedBook: LoadedBookState | undefined;
@@ -84,6 +85,7 @@ export class SidecarServer {
     this.host = options.host ?? '127.0.0.1';
 
     const cacheBase = options.cacheDir ?? path.join(os.tmpdir(), 'xhtml-reader-sidecar');
+    this.cacheDir = cacheBase;
     this.cacheManager = new EpubCacheManager(cacheBase);
 
     const storagePath = options.storageDir
@@ -343,6 +345,20 @@ export class SidecarServer {
       return;
     }
 
+    // 3b. Upload and Open File API
+    if (pathname === '/api/upload' && req.method === 'POST') {
+      await this.handleUploadApi(req, res);
+      return;
+    }
+
+    // 3c. Workspace Files API
+    if (pathname === '/api/workspace-files' && req.method === 'GET') {
+      const files = await this.scanWorkspaceFiles();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ files }));
+      return;
+    }
+
     // 4. Server-Sent Events (SSE) Stream
     if (pathname === '/api/events' && req.method === 'GET') {
       this.handleSseStream(req, res);
@@ -508,6 +524,12 @@ export class SidecarServer {
         });
       } else if (msg.type === 'requestFootnote') {
         await this.handleFootnoteRequest(msg);
+      } else if (msg.type === 'closeBook') {
+        this.loadedBook = undefined;
+        this.broadcastEvent('bookLoaded', null);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ received: true, chapterChanged: true }));
+        return;
       }
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -599,10 +621,127 @@ export class SidecarServer {
     }
   }
 
+  private async handleUploadApi(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    try {
+      const fileNameHeader = req.headers['x-file-name'];
+      let fileName = 'uploaded.epub';
+      if (typeof fileNameHeader === 'string' && fileNameHeader.trim()) {
+        fileName = path.basename(decodeURIComponent(fileNameHeader));
+      }
+
+      const uploadDir = path.join(this.cacheDir, 'uploads');
+      await fsp.mkdir(uploadDir, { recursive: true });
+      const targetPath = path.join(uploadDir, fileName);
+
+      const writeStream = fs.createWriteStream(targetPath);
+      await new Promise<void>((resolve, reject) => {
+        req.pipe(writeStream);
+        req.on('error', reject);
+        writeStream.on('finish', () => resolve());
+        writeStream.on('error', reject);
+      });
+
+      const book = await this.openBook(targetPath);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          title: book.title,
+          totalChapters: book.epubPackage?.spine.length ?? 1
+        })
+      );
+    } catch (err: any) {
+      console.error('[Sidecar] Upload error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message || String(err) }));
+    }
+  }
+
+  private async scanWorkspaceFiles(
+    dir = process.cwd(),
+    depth = 0,
+    maxDepth = 3
+  ): Promise<Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }>> {
+    if (depth > maxDepth) return [];
+    try {
+      const entries = await fsp.readdir(dir, { withFileTypes: true });
+      const results: Array<{ fullPath: string; relPath: string; name: string; isEpub: boolean }> = [];
+
+      for (const entry of entries) {
+        if (
+          entry.name.startsWith('.') ||
+          entry.name === 'node_modules' ||
+          entry.name === 'dist' ||
+          entry.name === 'tasks' ||
+          entry.name === 'coverage'
+        ) {
+          continue;
+        }
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          const sub = await this.scanWorkspaceFiles(fullPath, depth + 1, maxDepth);
+          results.push(...sub);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (['.epub', '.xhtml', '.html', '.htm'].includes(ext)) {
+            const relPath = path.relative(process.cwd(), fullPath).replace(/\\/g, '/');
+            results.push({
+              fullPath,
+              relPath,
+              name: entry.name,
+              isEpub: ext === '.epub' || fullPath.includes('OEBPS') || fullPath.includes('EPUB')
+            });
+          }
+        }
+      }
+      return results;
+    } catch {
+      return [];
+    }
+  }
+
+  private escapeText(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   private async serveReaderUi(_req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const preferences = this.stateManager.getPreferences();
 
     if (!this.loadedBook) {
+      const workspaceFiles = await this.scanWorkspaceFiles();
+      let filesListHtml = '';
+
+      if (workspaceFiles.length > 0) {
+        filesListHtml = `
+      <div class="workspace-section">
+        <div class="section-title">📂 Berkas Ditemukan di Workspace</div>
+        <div class="file-list">
+          ${workspaceFiles
+            .map(
+              (f) => `
+          <div class="file-item">
+            <div class="file-info">
+              <span class="file-name">${this.escapeText(f.name)}</span>
+              <span class="file-path" title="${this.escapeText(f.relPath)}">${this.escapeText(f.relPath)}</span>
+            </div>
+            <button type="button" class="btn-open" onclick="openFile('${this.escapeText(f.relPath).replace(/'/g, "\\'")}')">Buka</button>
+          </div>`
+            )
+            .join('')}
+        </div>
+      </div>`;
+      } else {
+        filesListHtml = `
+      <div class="empty-tip">
+        <p style="margin: 0; color: #94a3b8; font-size: 0.8rem;">Tidak ada berkas .epub atau .xhtml di root workspace saat ini.</p>
+      </div>`;
+      }
+
       // Empty state
       const emptyHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -610,36 +749,169 @@ export class SidecarServer {
   <meta charset="UTF-8">
   <title>XHTML Reader Previewer</title>
   <style>
+    * { box-sizing: border-box; }
     body {
-      margin: 0; padding: 2rem;
-      background: #111827; color: #f3f4f6;
-      font-family: system-ui, -apple-system, sans-serif;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: 80vh; text-align: center;
+      margin: 0; padding: 1.5rem 1rem;
+      background: #0f172a; color: #f8fafc;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      min-height: 100vh;
     }
     .card {
-      background: #1f2937; border: 1px solid #374151; border-radius: 12px;
-      padding: 2.5rem; max-width: 440px; box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+      padding: 1.75rem 1.25rem; width: 100%; max-width: 480px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      display: flex; flex-direction: column; align-items: stretch;
     }
-    h1 { font-size: 1.4rem; margin-bottom: 0.75rem; color: #60a5fa; }
-    p { font-size: 0.95rem; color: #9ca3af; line-height: 1.5; margin-bottom: 1.5rem; }
+    .card-header { text-align: center; margin-bottom: 1.25rem; }
+    .card-icon { font-size: 2.2rem; margin-bottom: 0.35rem; }
+    h1 { font-size: 1.25rem; margin: 0 0 0.35rem; color: #60a5fa; font-weight: 600; }
+    p { font-size: 0.85rem; color: #94a3b8; line-height: 1.4; margin: 0; }
+    .section-title {
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+      color: #94a3b8; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;
+    }
+    .file-list {
+      display: flex; flex-direction: column; gap: 0.4rem; max-height: 180px; overflow-y: auto;
+      margin-bottom: 0.5rem; padding-right: 0.2rem;
+    }
+    .file-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+      padding: 0.5rem 0.65rem; transition: border-color 0.15s, background 0.15s;
+    }
+    .file-item:hover { border-color: #60a5fa; background: #131d33; }
+    .file-info { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+    .file-name { font-size: 0.85rem; font-weight: 500; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-path { font-size: 0.7rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .btn-open {
+      background: #2563eb; color: #ffffff; border: none; border-radius: 6px;
+      padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 500; cursor: pointer; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .btn-open:hover { background: #1d4ed8; }
+    .btn-primary {
+      background: #2563eb; color: #ffffff; border: none; border-radius: 8px;
+      padding: 0.65rem 1rem; font-size: 0.85rem; font-weight: 500; cursor: pointer; width: 100%;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      transition: background 0.15s; margin-bottom: 0.75rem;
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+    .divider {
+      display: flex; align-items: center; text-align: center; color: #64748b;
+      font-size: 0.75rem; margin: 0.85rem 0;
+    }
+    .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid #334155; }
+    .divider span { padding: 0 0.5rem; }
+    .path-form { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+    .path-input {
+      flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px;
+      padding: 0.45rem 0.65rem; color: #f8fafc; font-size: 0.8rem; outline: none;
+    }
+    .path-input:focus { border-color: #60a5fa; }
+    .btn-submit {
+      background: #334155; color: #f8fafc; border: none; border-radius: 6px;
+      padding: 0.45rem 0.75rem; font-size: 0.8rem; cursor: pointer; font-weight: 500;
+      transition: background 0.15s;
+    }
+    .btn-submit:hover { background: #475569; }
     .badge {
-      display: inline-block; background: #374151; color: #e5e7eb;
-      padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.8rem; font-weight: 500;
+      background: #0f172a; border: 1px solid #334155; color: #94a3b8;
+      padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.75rem; text-align: center; margin-top: 0.75rem;
     }
-    code { background: #111827; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.85rem; color: #93c5fd; }
+    .badge code { color: #93c5fd; }
   </style>
   <script>
     const evtSource = new EventSource('/api/events');
     evtSource.addEventListener('bookLoaded', () => { location.reload(); });
+
+    async function openFile(filePath) {
+      try {
+        const res = await fetch('/api/open', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath })
+        });
+        const data = await res.json();
+        if (data.success) {
+          location.reload();
+        } else {
+          alert(data.error || 'Gagal membuka berkas');
+        }
+      } catch (err) {
+        alert('Gagal menghubungi server: ' + err.message);
+      }
+    }
+
+    async function handleManualOpen(e) {
+      e.preventDefault();
+      const input = document.getElementById('manual-path-input');
+      const val = input.value.trim();
+      if (val) {
+        await openFile(val);
+      }
+    }
+
+    async function handleFileUpload(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const btn = document.getElementById('btn-upload');
+      if (btn) btn.textContent = 'Memuat berkas...';
+
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-File-Name': encodeURIComponent(file.name)
+          },
+          body: file
+        });
+        const data = await res.json();
+        if (data.success) {
+          location.reload();
+        } else {
+          alert(data.error || 'Gagal mengunggah berkas');
+          if (btn) btn.textContent = '📁 Pilih Berkas (.epub, .xhtml) dari Komputer...';
+        }
+      } catch (err) {
+        alert('Upload gagal: ' + err.message);
+        if (btn) btn.textContent = '📁 Pilih Berkas (.epub, .xhtml) dari Komputer...';
+      }
+    }
   </script>
 </head>
 <body>
   <div class="card">
-    <div style="font-size: 2.5rem; margin-bottom: 1rem;">📖</div>
-    <h1>XHTML & EPUB Reader</h1>
-    <p>Belum ada buku atau berkas XHTML yang dimuat ke dalam Auxiliary Pane.</p>
-    <div class="badge">Gunakan perintah Agent atau panggil <code>/api/open</code></div>
+    <div class="card-header">
+      <div class="card-icon">📖</div>
+      <h1>XHTML & EPUB Reader</h1>
+      <p>Belum ada buku atau berkas XHTML yang dimuat ke dalam Auxiliary Pane.</p>
+    </div>
+
+    ${filesListHtml}
+
+    <div class="divider"><span>atau pilih berkas</span></div>
+
+    <!-- Pilih Berkas dari Komputer -->
+    <div class="upload-section">
+      <input type="file" id="file-picker" accept=".epub,.xhtml,.html,.htm" style="display:none" onchange="handleFileUpload(this)">
+      <button type="button" class="btn-primary" id="btn-upload" onclick="document.getElementById('file-picker').click()">
+        📁 Pilih Berkas (.epub, .xhtml) dari Komputer...
+      </button>
+    </div>
+
+    <!-- Manual Path Input Form -->
+    <div class="manual-section">
+      <form onsubmit="handleManualOpen(event)" class="path-form">
+        <input type="text" id="manual-path-input" class="path-input" placeholder="Ketik atau tempel path berkas..." required />
+        <button type="submit" class="btn-submit">Buka</button>
+      </form>
+    </div>
+
+    <div class="badge">
+      Gunakan perintah Agent atau panggil <code>/api/open</code>
+    </div>
   </div>
 </body>
 </html>`;

@@ -87,6 +87,7 @@ const PHOSPHOR = {
   listNumbers: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M80,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H88A8,8,0,0,1,80,64Zm136,56H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Zm0,64H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16ZM44,56H36a8,8,0,0,0,0,16h8V96a8,8,0,0,0,16,0V48a8,8,0,0,0-8-8A8.09,8.09,0,0,0,44,56ZM52,148H44V140a8,8,0,0,0-16,0v16a8,8,0,0,0,8,8h16v8H28a8,8,0,0,0,0,16H52a8,8,0,0,0,8-8V156A8,8,0,0,0,52,148Zm0,48H36a8,8,0,0,0,0,16H52v8H36a8,8,0,0,0,0,16H52a8,8,0,0,0,8-8V204A8,8,0,0,0,52,196Z"/></svg>`,
   bookmarkSimple: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.76,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.76-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z"/></svg>`,
   arrowUUpLeft: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="15" height="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><polyline points="80 56 32 104 80 152"/><path d="M224,200a96,96,0,0,0-96-96H32"/></svg>`,
+  folderOpen: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M246.6,110.87l-24,80A16,16,0,0,1,207.25,202H40a14,14,0,0,1-14-14V64A14,14,0,0,1,40,50H93.33a14,14,0,0,1,9.9,4.1L128,79H208a14,14,0,0,1,14,14v8a6,6,0,0,1-12,0V93a2,2,0,0,0-2-2H124.69a6,6,0,0,1-4.24-1.76L95.76,64.55A2,2,0,0,0,93.33,62H40a2,2,0,0,0-2,2V180.4L58.07,120.2A16,16,0,0,1,73.41,108H240a6,6,0,0,1,6.6,2.87ZM207.25,190l24-80H73.41l-24,80Z"/></svg>`,
   x: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="14" height="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="20" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>`
 };
 
@@ -1400,6 +1401,7 @@ export function readerShell(
 
   <header id="toolbar" aria-label="Reader controls">
     <div class="toolbar-left">
+      <button type="button" data-action="open-menu" id="open-menu-btn" class="icon-btn" aria-label="Buka berkas / menu utama" title="Buka berkas / menu utama">${PHOSPHOR.folderOpen}</button>
       ${tocBtnHtml}
     </div>
 
@@ -2430,6 +2432,9 @@ export function readerShell(
           requestAnimationFrame(() => updatePagination(true, totalPages > 1 ? (currentPage - 1) / (totalPages - 1) : 0));
         }
         notifyPreferences();
+      }
+      if (action === 'open-menu') {
+        vscode.postMessage({ type: 'closeBook' });
       }
       if (action === 'mode') {
         toggleMode();

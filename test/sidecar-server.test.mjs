@@ -155,7 +155,59 @@ test('SidecarServer lifecycle and REST API test suite', async (t) => {
     assert.equal(statusJson.book.currentSpineIndex, 0);
   });
 
-  await t.test('12. Stop server cleans up smoothly', async () => {
+  await t.test('12. GET /api/workspace-files lists available XHTML and EPUB files', async () => {
+    const res = await fetch(`${serverUrl}/api/workspace-files`);
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.ok(Array.isArray(json.files));
+    assert.ok(json.files.length > 0);
+    const foundCh1 = json.files.find((f) => f.name === 'ch_1.xhtml');
+    assert.ok(foundCh1, 'Should find ch_1.xhtml in workspace');
+  });
+
+  await t.test('13. POST /api/message handles closeBook returning to empty state', async () => {
+    const res = await fetch(`${serverUrl}/api/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'closeBook' })
+    });
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.received, true);
+    assert.equal(json.chapterChanged, true);
+
+    const statusRes = await fetch(`${serverUrl}/api/status`);
+    const statusJson = await statusRes.json();
+    assert.equal(statusJson.loaded, false);
+    assert.equal(statusJson.book, null);
+  });
+
+  await t.test('14. POST /api/upload accepts and opens uploaded publication file', async () => {
+    const sampleContent = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head><title>Uploaded File Test</title></head>
+  <body><p>Hello from uploaded book!</p></body>
+</html>`;
+    const res = await fetch(`${serverUrl}/api/upload`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-File-Name': encodeURIComponent('test-upload.xhtml')
+      },
+      body: Buffer.from(sampleContent, 'utf-8')
+    });
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.success, true);
+    assert.equal(json.title, 'test-upload.xhtml');
+
+    const statusRes = await fetch(`${serverUrl}/api/status`);
+    const statusJson = await statusRes.json();
+    assert.equal(statusJson.loaded, true);
+    assert.equal(statusJson.book.title, 'test-upload.xhtml');
+  });
+
+  await t.test('15. Stop server cleans up smoothly', async () => {
     await server.stop();
     // Verify server is closed
     await assert.rejects(async () => {
