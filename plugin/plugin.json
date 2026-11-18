@@ -1,7 +1,7 @@
 {
   "name": "xhtml-reader-plugin",
   "displayName": "XHTML & EPUB Reader",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Interactive reader and previewer for XHTML and EPUB publications with auxiliary pane sidecar and MCP agent tools.",
   "author": "selvagant",
   "homepage": "https://github.com/intxdv/XHTML-Reader-Previewer",
