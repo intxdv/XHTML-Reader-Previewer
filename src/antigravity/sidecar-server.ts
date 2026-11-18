@@ -42,6 +42,8 @@ export interface LoadedBookState {
   currentSpineIndex: number;
   currentChapterPath: string;
   currentFragment?: string;
+  resetToTop?: boolean;
+  startAtBottom?: boolean;
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -424,12 +426,17 @@ export class SidecarServer {
         return;
       }
 
+      let chapterChanged = false;
+
       if (msg.type === 'prevChapter') {
         if (this.loadedBook.isEpub && this.loadedBook.epubPackage && this.loadedBook.currentSpineIndex > 0) {
           this.loadedBook.currentSpineIndex -= 1;
           const chapter = this.loadedBook.epubPackage.spine[this.loadedBook.currentSpineIndex];
           this.loadedBook.currentChapterPath = chapter.uri.fsPath || chapter.uri.path;
           this.loadedBook.currentFragment = undefined;
+          this.loadedBook.startAtBottom = Boolean(msg.startAtBottom);
+          this.loadedBook.resetToTop = !msg.startAtBottom;
+          chapterChanged = true;
           this.broadcastEvent('chapterChanged', {
             spineIndex: this.loadedBook.currentSpineIndex,
             chapterPath: this.loadedBook.currentChapterPath
@@ -445,9 +452,48 @@ export class SidecarServer {
           const chapter = this.loadedBook.epubPackage.spine[this.loadedBook.currentSpineIndex];
           this.loadedBook.currentChapterPath = chapter.uri.fsPath || chapter.uri.path;
           this.loadedBook.currentFragment = undefined;
+          this.loadedBook.resetToTop = true;
+          this.loadedBook.startAtBottom = false;
+          chapterChanged = true;
           this.broadcastEvent('chapterChanged', {
             spineIndex: this.loadedBook.currentSpineIndex,
             chapterPath: this.loadedBook.currentChapterPath
+          });
+        }
+      } else if (msg.type === 'openLink' && msg.href) {
+        if (msg.currentPosition) {
+          await this.stateManager.saveReadingLocation(this.loadedBook.currentChapterPath, {
+            scrollRatio: msg.currentPosition.scrollRatio,
+            scrollY: msg.currentPosition.scrollY,
+            anchorId: msg.currentPosition.anchorId
+          });
+        }
+
+        const [filePart, fragment] = msg.href.split('#');
+        let targetPath = this.loadedBook.currentChapterPath;
+        if (filePart) {
+          const decoded = decodeURIComponent(filePart);
+          targetPath = path.resolve(path.dirname(this.loadedBook.currentChapterPath), decoded);
+        }
+
+        if (this.isSafePath(this.loadedBook.bookRootDir, targetPath)) {
+          if (this.loadedBook.isEpub && this.loadedBook.epubPackage) {
+            const foundIdx = this.loadedBook.epubPackage.spine.findIndex(
+              (item) => path.resolve(item.uri.fsPath || item.uri.path) === path.resolve(targetPath)
+            );
+            if (foundIdx >= 0) {
+              this.loadedBook.currentSpineIndex = foundIdx;
+            }
+          }
+          this.loadedBook.currentChapterPath = targetPath;
+          this.loadedBook.currentFragment = fragment;
+          this.loadedBook.resetToTop = !fragment;
+          this.loadedBook.startAtBottom = false;
+          chapterChanged = true;
+          this.broadcastEvent('chapterChanged', {
+            spineIndex: this.loadedBook.currentSpineIndex,
+            chapterPath: this.loadedBook.currentChapterPath,
+            fragment: this.loadedBook.currentFragment
           });
         }
       } else if (msg.type === 'savePreferences') {
@@ -465,9 +511,9 @@ export class SidecarServer {
       }
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ received: true, lastFootnote: this.lastFootnoteResponse }));
+      res.end(JSON.stringify({ received: true, chapterChanged, lastFootnote: this.lastFootnoteResponse }));
     } catch (err) {
-      console.error('[Sidecar] openBook error:', err);
+      console.error('[Sidecar] message error:', err);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: String(err) }));
     }
@@ -640,8 +686,12 @@ export class SidecarServer {
 
       const initialLocation = this.stateManager.getReadingLocation(this.loadedBook.currentChapterPath);
 
-      // Inject SSE live listener directly into HTML reader shell
-      let html = readerShell(
+      const resetToTop = Boolean(this.loadedBook.resetToTop);
+      const startAtBottom = Boolean(this.loadedBook.startAtBottom);
+      this.loadedBook.resetToTop = false;
+      this.loadedBook.startAtBottom = false;
+
+      const html = readerShell(
         rewrittenContent,
         this.loadedBook.currentChapterPath,
         this.loadedBook.currentFragment,
@@ -649,21 +699,9 @@ export class SidecarServer {
         navInfo,
         preferences,
         initialLocation,
-        false,
-        false
+        resetToTop,
+        startAtBottom
       );
-
-      // Inject client SSE hot-reload script before </body>
-      const sseScript = `
-<script>
-  (function() {
-    const sse = new EventSource('/api/events');
-    sse.addEventListener('chapterChanged', () => { location.reload(); });
-    sse.addEventListener('bookLoaded', () => { location.reload(); });
-  })();
-</script>
-</body>`;
-      html = html.replace('</body>', sseScript);
 
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);

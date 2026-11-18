@@ -217,7 +217,7 @@ export function readerShell(
 <html lang="en"${htmlClass}>
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource}; media-src ${webview.cspSource}; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; media-src ${webview.cspSource}; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; connect-src 'self' ${webview.cspSource};">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
   <style nonce="${nonce}">
@@ -1541,6 +1541,17 @@ export function readerShell(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(msg)
+          }).then(function(res) {
+            return res.json();
+          }).then(function(data) {
+            if (data && data.lastFootnote) {
+              window.dispatchEvent(new MessageEvent('message', {
+                data: Object.assign({ type: 'footnoteResponse' }, data.lastFootnote)
+              }));
+            }
+            if (data && data.chapterChanged) {
+              location.reload();
+            }
           }).catch(function(err) {
             console.warn('Sidecar message dispatch failed:', err);
           });
@@ -1722,6 +1733,19 @@ export function readerShell(
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
       vscode.postMessage(message);
+
+      // Safety recovery timeout: restore opacity & flags if navigation or reload stalls
+      setTimeout(() => {
+        if (isTransitioningChapter) {
+          isTransitioningChapter = false;
+          if (contentEl) {
+            contentEl.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+            contentEl.style.transform = '';
+            contentEl.style.opacity = '1';
+          }
+          resetOverscrollCues();
+        }
+      }, 1200);
     }
 
     let size = ${prefs.fontSize};

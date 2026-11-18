@@ -118,7 +118,44 @@ test('SidecarServer lifecycle and REST API test suite', async (t) => {
     assert.equal(res.status, 200);
   });
 
-  await t.test('10. Stop server cleans up smoothly', async () => {
+  await t.test('10. POST /api/message handles requestFootnote extraction', async () => {
+    const res = await fetch(`${serverUrl}/api/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'requestFootnote',
+        href: 'notes.xhtml#fn1',
+        requestId: 'req-123'
+      })
+    });
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.received, true);
+    assert.ok(json.lastFootnote);
+    assert.equal(json.lastFootnote.requestId, 'req-123');
+    assert.match(json.lastFootnote.html, /Catatan ini diekstrak langsung dari berkas terpisah/);
+  });
+
+  await t.test('11. POST /api/message handles openLink navigation', async () => {
+    const res = await fetch(`${serverUrl}/api/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'openLink',
+        href: 'ch_1.xhtml'
+      })
+    });
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.received, true);
+    assert.equal(json.chapterChanged, true);
+
+    const statusRes = await fetch(`${serverUrl}/api/status`);
+    const statusJson = await statusRes.json();
+    assert.equal(statusJson.book.currentSpineIndex, 0);
+  });
+
+  await t.test('12. Stop server cleans up smoothly', async () => {
     await server.stop();
     // Verify server is closed
     await assert.rejects(async () => {
