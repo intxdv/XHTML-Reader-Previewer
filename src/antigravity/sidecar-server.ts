@@ -801,48 +801,55 @@ export class SidecarServer {
   <title>XHTML & EPUB Reader</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    ::selection { background: rgba(56, 189, 248, 0.25); color: #f8fafc; }
+    ::selection { background: #1f6feb; color: #ffffff; }
 
     :root {
-      --bg-canvas: #090d16;
-      --bg-surface: rgba(15, 23, 42, 0.7);
-      --bg-card: rgba(30, 41, 59, 0.5);
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-hover: rgba(56, 189, 248, 0.35);
-      --text-primary: #f8fafc;
-      --text-secondary: #94a3b8;
-      --text-muted: #64748b;
-      --accent-cyan: #38bdf8;
-      --accent-blue: #2563eb;
+      --bg-canvas: #0d1117;
+      --bg-surface: #161b22;
+      --bg-inset: #0d1117;
+      --border-subtle: #30363d;
+      --border-muted: #21262d;
+      --border-hover: #58a6ff;
+      --text-primary: #f0f6fc;
+      --text-secondary: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent-blue: #58a6ff;
+      --btn-bg: #21262d;
+      --btn-hover: #30363d;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
     }
 
     body {
-      margin: 0;
-      padding: 1.5rem 1rem;
-      background: var(--bg-canvas);
-      background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.07), transparent 70%);
-      color: var(--text-primary);
+      background-color: var(--bg-canvas);
+      color: var(--text-secondary);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
-      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      box-sizing: border-box;
+      overflow-y: auto;
       -webkit-font-smoothing: antialiased;
     }
 
     .shell {
       width: 100%;
       max-width: 440px;
+      margin: auto 0;
     }
 
     .card {
-      background: var(--bg-surface);
+      background-color: var(--bg-surface);
       border: 1px solid var(--border-subtle);
-      border-radius: 16px;
+      border-radius: 12px;
       padding: 1.75rem 1.35rem;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      backdrop-filter: blur(16px);
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
       display: flex;
       flex-direction: column;
       align-items: stretch;
@@ -861,24 +868,15 @@ export class SidecarServer {
       margin-bottom: 0.75rem;
     }
 
-    .brand-logo {
-      width: 56px;
-      height: 56px;
-      object-fit: contain;
-      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
-    }
-
-    .brand-fallback-icon {
-      color: var(--accent-cyan);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+    .brand-logo-svg {
+      width: 48px;
+      height: 48px;
     }
 
     h1 {
       font-size: 1.15rem;
       margin: 0 0 0.35rem;
-      color: #f1f5f9;
+      color: var(--text-primary);
       font-weight: 600;
       letter-spacing: -0.025em;
     }
@@ -914,8 +912,8 @@ export class SidecarServer {
     }
 
     .counter-chip {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      background-color: var(--btn-bg);
+      border: 1px solid var(--border-subtle);
       color: var(--text-secondary);
       font-size: 0.65rem;
       padding: 0.1rem 0.4rem;
@@ -936,7 +934,7 @@ export class SidecarServer {
       width: 5px;
     }
     .file-list::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.12);
+      background-color: var(--border-subtle);
       border-radius: 9999px;
     }
 
@@ -944,17 +942,16 @@ export class SidecarServer {
       display: flex;
       align-items: center;
       gap: 0.65rem;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 10px;
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-muted);
+      border-radius: 8px;
       padding: 0.5rem 0.65rem;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s, border-color 0.15s;
     }
 
     .file-item:hover {
       border-color: var(--border-hover);
-      background: rgba(56, 189, 248, 0.03);
-      transform: translateY(-1px);
+      background-color: #1c2128;
     }
 
     .file-badge {
@@ -968,15 +965,15 @@ export class SidecarServer {
     }
 
     .badge-epub {
-      background: rgba(14, 165, 233, 0.12);
-      color: #38bdf8;
-      border: 1px solid rgba(14, 165, 233, 0.25);
+      background-color: var(--bg-canvas);
+      color: #58a6ff;
+      border: 1px solid #1f6feb;
     }
 
     .badge-xhtml {
-      background: rgba(168, 85, 247, 0.12);
-      color: #c084fc;
-      border: 1px solid rgba(168, 85, 247, 0.25);
+      background-color: var(--bg-canvas);
+      color: #bc8cff;
+      border: 1px solid #8957e5;
     }
 
     .file-info {
@@ -1006,9 +1003,9 @@ export class SidecarServer {
     }
 
     .btn-open {
-      background: rgba(255, 255, 255, 0.04);
+      background-color: var(--btn-bg);
       color: var(--text-secondary);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-subtle);
       border-radius: 6px;
       padding: 0.35rem 0.65rem;
       font-size: 0.72rem;
@@ -1018,21 +1015,21 @@ export class SidecarServer {
       display: flex;
       align-items: center;
       gap: 0.3rem;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
     }
 
     .btn-open:hover {
-      background: rgba(56, 189, 248, 0.1);
-      color: var(--accent-cyan);
-      border-color: rgba(56, 189, 248, 0.3);
+      background-color: #1f6feb;
+      border-color: #388bfd;
+      color: #ffffff;
     }
 
     .empty-tip {
       padding: 0.75rem;
       text-align: center;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px dashed rgba(255, 255, 255, 0.08);
+      background-color: var(--bg-inset);
+      border: 1px dashed var(--border-subtle);
       margin-bottom: 0.75rem;
     }
     .empty-tip p {
@@ -1054,7 +1051,7 @@ export class SidecarServer {
     .divider-line {
       flex: 1;
       height: 1px;
-      background: rgba(255, 255, 255, 0.06);
+      background-color: var(--border-subtle);
     }
 
     .divider-text {
@@ -1065,40 +1062,34 @@ export class SidecarServer {
 
     /* Dropzone Upload Button */
     .dropzone {
-      border: 1px dashed rgba(255, 255, 255, 0.14);
-      border-radius: 12px;
+      border: 1px dashed var(--border-subtle);
+      border-radius: 10px;
       padding: 0.85rem 1rem;
-      background: rgba(255, 255, 255, 0.015);
+      background-color: var(--bg-inset);
       display: flex;
       align-items: center;
       gap: 0.85rem;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: background-color 0.15s, border-color 0.15s;
       margin-bottom: 0.75rem;
     }
 
     .dropzone:hover, .dropzone.dragover {
-      border-color: var(--accent-cyan);
-      background: rgba(56, 189, 248, 0.04);
-      box-shadow: 0 0 16px -4px rgba(56, 189, 248, 0.15);
+      border-color: var(--border-hover);
+      background-color: #1c2128;
     }
 
     .dropzone-icon {
       width: 36px;
       height: 36px;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--accent-cyan);
+      color: var(--accent-blue);
       flex-shrink: 0;
-      transition: transform 0.2s ease;
-    }
-
-    .dropzone:hover .dropzone-icon {
-      transform: translateY(-1px);
     }
 
     .dropzone-meta {
@@ -1124,18 +1115,17 @@ export class SidecarServer {
     .path-bar {
       display: flex;
       align-items: center;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-subtle);
       border-radius: 8px;
       padding: 0.25rem 0.35rem 0.25rem 0.65rem;
       gap: 0.45rem;
-      transition: border-color 0.15s ease;
       margin-bottom: 0.75rem;
+      transition: border-color 0.15s;
     }
 
     .path-bar:focus-within {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+      border-color: var(--border-hover);
     }
 
     .path-bar-icon {
@@ -1147,7 +1137,7 @@ export class SidecarServer {
 
     .path-input {
       flex: 1;
-      background: transparent;
+      background-color: transparent;
       border: none;
       color: var(--text-primary);
       font-size: 0.78rem;
@@ -1160,8 +1150,8 @@ export class SidecarServer {
     }
 
     .path-submit-btn {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background-color: var(--btn-bg);
+      border: 1px solid var(--border-subtle);
       color: var(--text-secondary);
       border-radius: 6px;
       padding: 0.35rem 0.55rem;
@@ -1169,19 +1159,19 @@ export class SidecarServer {
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
     }
 
     .path-submit-btn:hover {
-      background: var(--accent-cyan);
-      color: #090d16;
-      border-color: var(--accent-cyan);
+      background-color: #1f6feb;
+      border-color: #388bfd;
+      color: #ffffff;
     }
 
     /* Footnote Badge */
     .badge {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-muted);
       color: var(--text-muted);
       padding: 0.45rem 0.65rem;
       border-radius: 8px;
@@ -1194,7 +1184,7 @@ export class SidecarServer {
     }
 
     .badge code {
-      color: var(--accent-cyan);
+      color: var(--accent-blue);
       font-family: ui-monospace, SFMono-Regular, monospace;
       font-size: 0.7rem;
     }
@@ -1297,14 +1287,16 @@ export class SidecarServer {
     <div class="card">
       <div class="card-header">
         <div class="brand-logo-wrap">
-          <img src="/logo.png" alt="XHTML Reader Logo" class="brand-logo" onerror="this.style.display='none'; document.getElementById('fallback-logo-icon').style.display='inline-flex';" />
-          <div id="fallback-logo-icon" class="brand-fallback-icon" style="display: none;">
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
-              <path d="M6 6h10"></path>
-              <path d="M6 10h7"></path>
-            </svg>
-          </div>
+          <svg class="brand-logo-svg" width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 10.5C6 9.11929 7.11929 8 8.5 8H22C23.1046 8 24 8.89543 24 10V38C24 37.1716 23.3284 36.5 22.5 36.5H8.5C7.11929 36.5 6 37.6193 6 39V10.5Z" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
+            <path d="M42 10.5C42 9.11929 40.8807 8 39.5 8H26C24.8954 8 24 8.89543 24 10V38C24 37.1716 24.6716 36.5 25.5 36.5H39.5C40.8807 36.5 42 37.6193 42 39V10.5Z" stroke="#58a6ff" stroke-width="2.5" stroke-linejoin="round"/>
+            <line x1="11" y1="15" x2="19" y2="15" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+            <line x1="11" y1="21" x2="19" y2="21" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+            <line x1="11" y1="27" x2="17" y2="27" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+            <line x1="29" y1="15" x2="37" y2="15" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+            <line x1="29" y1="21" x2="37" y2="21" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+            <line x1="29" y1="27" x2="35" y2="27" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+          </svg>
         </div>
         <h1>XHTML & EPUB Reader</h1>
         <p class="brand-lead">Belum ada buku atau berkas XHTML yang dimuat ke dalam Auxiliary Pane.</p>
