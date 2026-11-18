@@ -314,6 +314,12 @@ export class SidecarServer {
       return;
     }
 
+    // 1b. Brand Logo Asset
+    if (pathname === '/logo.png' && req.method === 'GET') {
+      await this.serveLogo(res);
+      return;
+    }
+
     // 2. Status API
     if (pathname === '/api/status' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -580,6 +586,35 @@ export class SidecarServer {
     }
   }
 
+  private async serveLogo(res: http.ServerResponse): Promise<void> {
+    const candidatePaths = [
+      path.resolve(__dirname, '../assets/logo.png'),
+      path.resolve(__dirname, '../plugin/assets/logo.png'),
+      path.resolve(__dirname, '../media/icon.png'),
+      path.resolve(process.cwd(), 'plugin/assets/logo.png'),
+      path.resolve(process.cwd(), 'media/icon.png')
+    ];
+
+    for (const p of candidatePaths) {
+      try {
+        await fsp.access(p, fs.constants.R_OK);
+        const stat = await fsp.stat(p);
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Content-Length': stat.size,
+          'Cache-Control': 'public, max-age=86400'
+        });
+        fs.createReadStream(p).pipe(res);
+        return;
+      } catch {
+        // try next candidate path
+      }
+    }
+
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Logo Not Found');
+  }
+
   private async serveAsset(assetRelPath: string, res: http.ServerResponse): Promise<void> {
     if (!this.loadedBook) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -719,17 +754,32 @@ export class SidecarServer {
       if (workspaceFiles.length > 0) {
         filesListHtml = `
       <div class="workspace-section">
-        <div class="section-title">📂 Berkas Ditemukan di Workspace</div>
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Berkas di Workspace</span>
+          <span class="counter-chip">${workspaceFiles.length}</span>
+        </div>
         <div class="file-list">
           ${workspaceFiles
             .map(
               (f) => `
           <div class="file-item">
+            <span class="file-badge ${f.isEpub ? 'badge-epub' : 'badge-xhtml'}">
+              ${f.isEpub ? 'EPUB' : 'XHTML'}
+            </span>
             <div class="file-info">
               <span class="file-name">${this.escapeText(f.name)}</span>
               <span class="file-path" title="${this.escapeText(f.relPath)}">${this.escapeText(f.relPath)}</span>
             </div>
-            <button type="button" class="btn-open" onclick="openFile('${this.escapeText(f.relPath).replace(/'/g, "\\'")}')">Buka</button>
+            <button type="button" class="btn-open" onclick="openFile('${this.escapeText(f.relPath).replace(/'/g, "\\'")}')">
+              <span>Buka</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
           </div>`
             )
             .join('')}
@@ -738,7 +788,7 @@ export class SidecarServer {
       } else {
         filesListHtml = `
       <div class="empty-tip">
-        <p style="margin: 0; color: #94a3b8; font-size: 0.8rem;">Tidak ada berkas .epub atau .xhtml di root workspace saat ini.</p>
+        <p>Tidak ada berkas .epub atau .xhtml di workspace saat ini.</p>
       </div>`;
       }
 
@@ -747,79 +797,411 @@ export class SidecarServer {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>XHTML Reader Previewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XHTML & EPUB Reader</title>
   <style>
-    * { box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: border-box; }
+    ::selection { background: rgba(56, 189, 248, 0.25); color: #f8fafc; }
+
+    :root {
+      --bg-canvas: #090d16;
+      --bg-surface: rgba(15, 23, 42, 0.7);
+      --bg-card: rgba(30, 41, 59, 0.5);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(56, 189, 248, 0.35);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-cyan: #38bdf8;
+      --accent-blue: #2563eb;
+    }
+
     body {
-      margin: 0; padding: 1.5rem 1rem;
-      background: #0f172a; color: #f8fafc;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      margin: 0;
+      padding: 1.5rem 1rem;
+      background: var(--bg-canvas);
+      background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.07), transparent 70%);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      -webkit-font-smoothing: antialiased;
     }
+
+    .shell {
+      width: 100%;
+      max-width: 440px;
+    }
+
     .card {
-      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
-      padding: 1.75rem 1.25rem; width: 100%; max-width: 480px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-      display: flex; flex-direction: column; align-items: stretch;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 1.75rem 1.35rem;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
     }
-    .card-header { text-align: center; margin-bottom: 1.25rem; }
-    .card-icon { font-size: 2.2rem; margin-bottom: 0.35rem; }
-    h1 { font-size: 1.25rem; margin: 0 0 0.35rem; color: #60a5fa; font-weight: 600; }
-    p { font-size: 0.85rem; color: #94a3b8; line-height: 1.4; margin: 0; }
+
+    /* Branded Header */
+    .card-header {
+      text-align: center;
+      margin-bottom: 1.35rem;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      margin-bottom: 0.75rem;
+      overflow: hidden;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      border-radius: 10px;
+    }
+
+    .brand-fallback-icon {
+      color: var(--accent-cyan);
+    }
+
+    h1 {
+      font-size: 1.15rem;
+      margin: 0 0 0.35rem;
+      color: #f1f5f9;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+
+    .brand-lead {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    .brand-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin: 0.25rem 0 0;
+    }
+
+    /* Workspace Section */
+    .workspace-section {
+      margin-bottom: 0.75rem;
+    }
+
     .section-title {
-      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
-      color: #94a3b8; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
     }
+
+    .counter-chip {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-secondary);
+      font-size: 0.65rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 9999px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+
     .file-list {
-      display: flex; flex-direction: column; gap: 0.4rem; max-height: 180px; overflow-y: auto;
-      margin-bottom: 0.5rem; padding-right: 0.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 0.2rem;
     }
+
+    .file-list::-webkit-scrollbar {
+      width: 5px;
+    }
+    .file-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 9999px;
+    }
+
     .file-item {
-      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
-      padding: 0.5rem 0.65rem; transition: border-color 0.15s, background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 0.5rem 0.65rem;
+      transition: all 0.15s ease;
     }
-    .file-item:hover { border-color: #60a5fa; background: #131d33; }
-    .file-info { display: flex; flex-direction: column; min-width: 0; text-align: left; }
-    .file-name { font-size: 0.85rem; font-weight: 500; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .file-path { font-size: 0.7rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .file-item:hover {
+      border-color: var(--border-hover);
+      background: rgba(56, 189, 248, 0.03);
+      transform: translateY(-1px);
+    }
+
+    .file-badge {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 0.2rem 0.45rem;
+      border-radius: 6px;
+      flex-shrink: 0;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+
+    .badge-epub {
+      background: rgba(14, 165, 233, 0.12);
+      color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.25);
+    }
+
+    .badge-xhtml {
+      background: rgba(168, 85, 247, 0.12);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+
+    .file-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+      text-align: left;
+    }
+
+    .file-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-path {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+
     .btn-open {
-      background: #2563eb; color: #ffffff; border: none; border-radius: 6px;
-      padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 500; cursor: pointer; flex-shrink: 0;
-      transition: background 0.15s;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-secondary);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.72rem;
+      font-weight: 500;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: all 0.15s ease;
     }
-    .btn-open:hover { background: #1d4ed8; }
-    .btn-primary {
-      background: #2563eb; color: #ffffff; border: none; border-radius: 8px;
-      padding: 0.65rem 1rem; font-size: 0.85rem; font-weight: 500; cursor: pointer; width: 100%;
-      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-      transition: background 0.15s; margin-bottom: 0.75rem;
+
+    .btn-open:hover {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent-cyan);
+      border-color: rgba(56, 189, 248, 0.3);
     }
-    .btn-primary:hover { background: #1d4ed8; }
+
+    .empty-tip {
+      padding: 0.75rem;
+      text-align: center;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed rgba(255, 255, 255, 0.08);
+      margin-bottom: 0.75rem;
+    }
+    .empty-tip p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
+    /* Divider */
     .divider {
-      display: flex; align-items: center; text-align: center; color: #64748b;
-      font-size: 0.75rem; margin: 0.85rem 0;
+      display: flex;
+      align-items: center;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      margin: 0.85rem 0;
     }
-    .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid #334155; }
-    .divider span { padding: 0 0.5rem; }
-    .path-form { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+
+    .divider-line {
+      flex: 1;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .divider-text {
+      padding: 0 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Dropzone Upload Button */
+    .dropzone {
+      border: 1px dashed rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      background: rgba(255, 255, 255, 0.015);
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 0.75rem;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.04);
+      box-shadow: 0 0 16px -4px rgba(56, 189, 248, 0.15);
+    }
+
+    .dropzone-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+
+    .dropzone:hover .dropzone-icon {
+      transform: translateY(-1px);
+    }
+
+    .dropzone-meta {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+      min-width: 0;
+    }
+
+    .dropzone-primary {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .dropzone-secondary {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.15rem;
+    }
+
+    /* Manual Path Input Bar */
+    .path-bar {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 0.25rem 0.35rem 0.25rem 0.65rem;
+      gap: 0.45rem;
+      transition: border-color 0.15s ease;
+      margin-bottom: 0.75rem;
+    }
+
+    .path-bar:focus-within {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+    }
+
+    .path-bar-icon {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
     .path-input {
-      flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px;
-      padding: 0.45rem 0.65rem; color: #f8fafc; font-size: 0.8rem; outline: none;
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.78rem;
+      outline: none;
+      min-width: 0;
     }
-    .path-input:focus { border-color: #60a5fa; }
-    .btn-submit {
-      background: #334155; color: #f8fafc; border: none; border-radius: 6px;
-      padding: 0.45rem 0.75rem; font-size: 0.8rem; cursor: pointer; font-weight: 500;
-      transition: background 0.15s;
+
+    .path-input::placeholder {
+      color: var(--text-muted);
     }
-    .btn-submit:hover { background: #475569; }
+
+    .path-submit-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 0.35rem 0.55rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .path-submit-btn:hover {
+      background: var(--accent-cyan);
+      color: #090d16;
+      border-color: var(--accent-cyan);
+    }
+
+    /* Footnote Badge */
     .badge {
-      background: #0f172a; border: 1px solid #334155; color: #94a3b8;
-      padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.75rem; text-align: center; margin-top: 0.75rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      padding: 0.45rem 0.65rem;
+      border-radius: 8px;
+      font-size: 0.72rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      text-align: center;
     }
-    .badge code { color: #93c5fd; }
+
+    .badge code {
+      color: var(--accent-cyan);
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 0.7rem;
+    }
   </style>
   <script>
     const evtSource = new EventSource('/api/events');
@@ -852,11 +1234,10 @@ export class SidecarServer {
       }
     }
 
-    async function handleFileUpload(input) {
-      if (!input.files || !input.files[0]) return;
-      const file = input.files[0];
-      const btn = document.getElementById('btn-upload');
-      if (btn) btn.textContent = 'Memuat berkas...';
+    async function uploadFile(file) {
+      if (!file) return;
+      const label = document.getElementById('dropzone-label');
+      if (label) label.textContent = 'Memuat ' + file.name + '...';
 
       try {
         const res = await fetch('/api/upload', {
@@ -872,45 +1253,116 @@ export class SidecarServer {
           location.reload();
         } else {
           alert(data.error || 'Gagal mengunggah berkas');
-          if (btn) btn.textContent = '📁 Pilih Berkas (.epub, .xhtml) dari Komputer...';
+          if (label) label.textContent = 'Pilih Berkas dari Komputer';
         }
       } catch (err) {
         alert('Upload gagal: ' + err.message);
-        if (btn) btn.textContent = '📁 Pilih Berkas (.epub, .xhtml) dari Komputer...';
+        if (label) label.textContent = 'Pilih Berkas dari Komputer';
       }
     }
+
+    function handleFileUpload(input) {
+      if (!input.files || !input.files[0]) return;
+      uploadFile(input.files[0]);
+    }
+
+    // Drag and Drop support
+    window.addEventListener('DOMContentLoaded', () => {
+      const dropzone = document.getElementById('dropzone');
+      if (!dropzone) return;
+
+      ['dragenter', 'dragover'].forEach(name => {
+        window.addEventListener(name, (e) => {
+          e.preventDefault();
+          dropzone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'dragend'].forEach(name => {
+        window.addEventListener(name, (e) => {
+          if (!e.relatedTarget) {
+            dropzone.classList.remove('dragover');
+          }
+        });
+      });
+
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          uploadFile(e.dataTransfer.files[0]);
+        }
+      });
+    });
   </script>
 </head>
 <body>
-  <div class="card">
-    <div class="card-header">
-      <div class="card-icon">📖</div>
-      <h1>XHTML & EPUB Reader</h1>
-      <p>Belum ada buku atau berkas XHTML yang dimuat ke dalam Auxiliary Pane.</p>
-    </div>
+  <div class="shell">
+    <div class="card">
+      <div class="card-header">
+        <div class="brand-badge">
+          <img src="/logo.png" alt="XHTML Reader Logo" class="brand-logo" onerror="this.style.display='none'; document.getElementById('fallback-logo-icon').style.display='flex';" />
+          <div id="fallback-logo-icon" class="brand-fallback-icon" style="display: none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+              <path d="M6 6h10"></path>
+              <path d="M6 10h7"></path>
+            </svg>
+          </div>
+        </div>
+        <h1>XHTML & EPUB Reader</h1>
+        <p class="brand-lead">Belum ada buku atau berkas XHTML yang dimuat ke dalam Auxiliary Pane.</p>
+        <p class="brand-sub">Pilih naskah di workspace atau pilih berkas untuk mulai membaca.</p>
+      </div>
 
-    ${filesListHtml}
+      ${filesListHtml}
 
-    <div class="divider"><span>atau pilih berkas</span></div>
+      <div class="divider">
+        <span class="divider-line"></span>
+        <span class="divider-text">atau</span>
+        <span class="divider-line"></span>
+      </div>
 
-    <!-- Pilih Berkas dari Komputer -->
-    <div class="upload-section">
-      <input type="file" id="file-picker" accept=".epub,.xhtml,.html,.htm" style="display:none" onchange="handleFileUpload(this)">
-      <button type="button" class="btn-primary" id="btn-upload" onclick="document.getElementById('file-picker').click()">
-        📁 Pilih Berkas (.epub, .xhtml) dari Komputer...
-      </button>
-    </div>
+      <!-- Pilih Berkas dari Komputer / Dropzone -->
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-picker').click()">
+        <input type="file" id="file-picker" accept=".epub,.xhtml,.html,.htm" style="display:none" onchange="handleFileUpload(this)">
+        <div class="dropzone-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
+        <div class="dropzone-meta">
+          <span class="dropzone-primary" id="dropzone-label">Pilih Berkas dari Komputer</span>
+          <span class="dropzone-secondary">atau seret dan lepas (.epub, .xhtml) ke panel ini</span>
+        </div>
+      </div>
 
-    <!-- Manual Path Input Form -->
-    <div class="manual-section">
-      <form onsubmit="handleManualOpen(event)" class="path-form">
-        <input type="text" id="manual-path-input" class="path-input" placeholder="Ketik atau tempel path berkas..." required />
-        <button type="submit" class="btn-submit">Buka</button>
+      <!-- Manual Path Input Form -->
+      <form onsubmit="handleManualOpen(event)" class="path-bar">
+        <div class="path-bar-icon" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+        </div>
+        <input type="text" id="manual-path-input" class="path-input" placeholder="Ketik atau tempel path berkas..." required autocomplete="off" spellcheck="false" />
+        <button type="submit" class="path-submit-btn" title="Buka berkas">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
       </form>
-    </div>
 
-    <div class="badge">
-      Gunakan perintah Agent atau panggil <code>/api/open</code>
+      <div class="badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="4 17 10 11 4 5"></polyline>
+          <line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+        <span>Gunakan perintah Agent atau panggil <code>/api/open</code></span>
+      </div>
     </div>
   </div>
 </body>
